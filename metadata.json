@@ -1,5 +1,5 @@
 {
-  "name": "Commercial Area Analyzer",
+  "name": "상권분석 앱",
   "description": "Integrated commercial area analysis dashboard using public data APIs (V-World, Data.go.kr).",
   "requestFramePermissions": []
 }

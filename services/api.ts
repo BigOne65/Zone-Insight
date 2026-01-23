@@ -27,6 +27,8 @@ const DATA_API_KEY = getEnvVar("VITE_DATA_API_KEY");
 const VWORLD_KEY = getEnvVar("VITE_VWORLD_KEY");
 
 const BASE_URL = "http://apis.data.go.kr/B553077/api/open/sdsc2";
+// [변경] V-World URL을 상수로 분리했습니다.
+const VWORLD_BASE_URL = "https://api.vworld.kr/req/search";
 
 // Helper: JSONP for V-World
 const fetchJsonp = (url: string, callbackParam = 'callback'): Promise<any> => {
@@ -80,7 +82,8 @@ export const searchAddress = async (address: string): Promise<any> => {
     let errorDetails: string[] = [];
     
     const runSearch = async (searchType: string, category?: string) => {
-        let baseUrl = `https://api.vworld.kr/req/search?service=search&request=search&version=2.0&crs=EPSG:4326&size=10&page=1&query=${encodeURIComponent(address)}&type=${searchType}&format=json&errorformat=json&key=${VWORLD_KEY}`;
+        // [변경] 분리한 상수(VWORLD_BASE_URL)를 사용하도록 수정
+        let baseUrl = `${VWORLD_BASE_URL}?service=search&request=search&version=2.0&crs=EPSG:4326&size=10&page=1&query=${encodeURIComponent(address)}&type=${searchType}&format=json&errorformat=json&key=${VWORLD_KEY}`;
         if (category) baseUrl += `&category=${category}`;
         
         try {
