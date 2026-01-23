@@ -97,23 +97,32 @@ const TradeMap: React.FC<MapProps> = ({ lat, lon, polygonCoords, tradeName, drag
         if (markers && markers.length > 0) {
             markers.forEach((m, idx) => {
                 if (m.lat && m.lon) {
-                    const iconHtml = `<div style="background-color: #ef4444; color: white; width: 24px; height: 24px; border-radius: 50%; display: flex; align-items: center; justify-content: center; font-weight: bold; font-size: 12px; border: 2px solid white; box-shadow: 0 2px 4px rgba(0,0,0,0.3); cursor: pointer;">${idx + 1}</div>`;
+                    const isSelected = selectedMarkerIndex === idx;
+                    // 선택되면 파란색(#3b82f6), 아니면 빨간색(#ef4444)
+                    const bgColor = isSelected ? '#3b82f6' : '#ef4444';
+                    
+                    const iconHtml = `<div style="background-color: ${bgColor}; color: white; width: 24px; height: 24px; border-radius: 50%; display: flex; align-items: center; justify-content: center; font-weight: bold; font-size: 12px; border: 2px solid white; box-shadow: 0 2px 4px rgba(0,0,0,0.3); cursor: pointer;">${idx + 1}</div>`;
+                    
                     const customIcon = L.divIcon({
                         className: 'custom-div-icon',
                         html: iconHtml,
                         iconSize: [24, 24],
                         iconAnchor: [12, 12]
                     });
-                    const marker = L.marker([m.lat, m.lon], { icon: customIcon })
+                    
+                    const marker = L.marker([m.lat, m.lon], { 
+                        icon: customIcon,
+                        zIndexOffset: isSelected ? 1000 : 0 
+                    })
                         .bindPopup(`<div style="text-align:center;">
-                            <b style="color:#ef4444;">상가밀집 ${idx + 1}위</b><br>
+                            <b style="color:${bgColor};">상가밀집 ${idx + 1}위</b><br>
                             <b>${m.name}</b><br>
                             <span style="color:#666;">(점포 ${m.count}개)</span>
                         </div>`);
                     
                     extraMarkersRef.current.addLayer(marker);
                     
-                    if (selectedMarkerIndex === idx) {
+                    if (isSelected) {
                         setTimeout(() => marker.openPopup(), 100);
                     }
                 }
