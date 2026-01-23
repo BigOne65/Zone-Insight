@@ -2,6 +2,7 @@ import React, { useState, useEffect, useMemo } from 'react';
 import { PieChart, Pie, Cell, BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer, Sector } from 'recharts';
 import * as Icons from './components/Icons';
 import TradeMap from './components/Map';
+import GoogleAd from './components/GoogleAd'; // Import Ad Component
 import { searchAddress, searchZones, fetchStores } from './services/api';
 import { Zone, Store, StoreStats } from './types';
 
@@ -326,6 +327,7 @@ const App: React.FC = () => {
 
       {/* 1. Input */}
       {step === 'input' && (
+        <>
         <div className="bg-white rounded-2xl shadow-lg p-4 md:p-8 max-w-2xl mx-auto mt-10 md:mt-20 text-center animate-fade-in">
            <h2 className="text-lg md:text-xl font-bold mb-4 md:mb-6">분석할 지역의 주소를 입력해주세요</h2>
            <div className="flex flex-col gap-2 mb-4">
@@ -338,6 +340,10 @@ const App: React.FC = () => {
            </div>
            {error && <p className="text-red-500 text-sm mt-2">{error}</p>}
         </div>
+        <div className="max-w-2xl mx-auto mt-6 animate-fade-in">
+           <GoogleAd slot="2761269289" />
+        </div>
+        </>
       )}
 
       {/* 2. Verify Map */}
@@ -482,6 +488,9 @@ const App: React.FC = () => {
                      </div>
                  </div>
 
+                 {/* AD Placement 1: Between Summary and Charts */}
+                 <GoogleAd slot="4992341640" />
+
                  {/* Charts */}
                  <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                      <div className="bg-white p-6 rounded-xl shadow-sm border clickable-chart">
@@ -570,6 +579,9 @@ const App: React.FC = () => {
                          </div>
                      </div>
                  </div>
+
+                 {/* AD Placement 2: Between Charts and Detailed Table */}
+                 <GoogleAd slot="1816170509" />
 
                  {/* Comprehensive Analysis Table (New) */}
                  <div className="bg-white rounded-xl shadow-sm border overflow-hidden">
@@ -678,6 +690,9 @@ const App: React.FC = () => {
                        </table>
                     </div>
                  </div>
+
+                 {/* AD Placement 3: Bottom of the page */}
+                 <GoogleAd slot="3283674157" />
              </div>
          </div>
       )}
