@@ -367,6 +367,7 @@ const App: React.FC = () => {
                            tradeName={tradeZone.mainTrarNm} 
                            markers={storeStats.buildingData}
                            selectedMarkerIndex={selectedBuildingIndex}
+                           onMarkerClick={(index) => setSelectedBuildingIndex(prev => prev === index ? null : index)}
                         />
                     </div>
                  </div>
@@ -453,7 +454,7 @@ const App: React.FC = () => {
                                         ))}
                                      </tbody>
                                   </table>
-                               </div>
+                                </div>
                             )}
                          </div>
                      </div>

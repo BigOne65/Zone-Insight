@@ -16,9 +16,10 @@ interface MapProps {
   onDragEnd?: (lat: number, lon: number) => void;
   markers?: ChartData[];
   selectedMarkerIndex?: number | null;
+  onMarkerClick?: (index: number) => void;
 }
 
-const TradeMap: React.FC<MapProps> = ({ lat, lon, polygonCoords, tradeName, draggable, onDragEnd, markers = [], selectedMarkerIndex }) => {
+const TradeMap: React.FC<MapProps> = ({ lat, lon, polygonCoords, tradeName, draggable, onDragEnd, markers = [], selectedMarkerIndex, onMarkerClick }) => {
     const mapRef = useRef<HTMLDivElement>(null);
     const mapInstanceRef = useRef<any>(null);
     const polygonLayerRef = useRef<any>(null);
@@ -120,6 +121,12 @@ const TradeMap: React.FC<MapProps> = ({ lat, lon, polygonCoords, tradeName, drag
                             <span style="color:#666;">(점포 ${m.count}개)</span>
                         </div>`);
                     
+                    marker.on('click', () => {
+                        if (onMarkerClick) {
+                            onMarkerClick(idx);
+                        }
+                    });
+
                     extraMarkersRef.current.addLayer(marker);
                     
                     if (isSelected) {
@@ -131,7 +138,7 @@ const TradeMap: React.FC<MapProps> = ({ lat, lon, polygonCoords, tradeName, drag
 
         setTimeout(refreshMap, 300);
 
-    }, [lat, lon, polygonCoords, tradeName, draggable, markers, L, selectedMarkerIndex]);
+    }, [lat, lon, polygonCoords, tradeName, draggable, markers, L, selectedMarkerIndex, onMarkerClick]);
 
     return <div ref={mapRef} className="w-full h-full min-h-[100px]" />;
 };
