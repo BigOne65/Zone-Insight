@@ -74,6 +74,7 @@ const App: React.FC = () => {
   
   // Interactive Map State
   const [selectedBuildingIndex, setSelectedBuildingIndex] = useState<number | null>(null);
+  const [detailedAnalysisFilter, setDetailedAnalysisFilter] = useState<string | null>(null);
 
   // Handlers
   const handleGeocode = async () => {
@@ -118,6 +119,7 @@ const App: React.FC = () => {
     setStep('result');
     setSelectedLarge(null); setSelectedMid(null);
     setSelectedBuildingIndex(null);
+    setDetailedAnalysisFilter(null);
 
     try {
       // fetchStores returns both stores and the stdrYm extracted from response header
@@ -236,10 +238,47 @@ const App: React.FC = () => {
      return storeStats.pieData.findIndex(i => i.name === selectedLarge);
   }, [storeStats, selectedLarge]);
 
+  const summaryTableDisplayData = useMemo(() => {
+    if(!storeStats) return [];
+    
+    // Default View (Large Category)
+    if(!detailedAnalysisFilter) return storeStats.summaryTableData;
+
+    // Drill-down View (Medium Category)
+    const targetStores = allRawStores.filter(s => s.indsLclsNm === detailedAnalysisFilter);
+    const groups: Record<string, any> = {};
+
+    targetStores.forEach(s => {
+        const m = s.indsMclsNm || "기타";
+        if(!groups[m]) groups[m] = { name: m, count: 0, franchise: 0, firstFloor: 0 };
+        const g = groups[m];
+        g.count++;
+        
+        const isFranchise = (s.brchNm && s.brchNm.trim() !== "") || (s.bizesNm.includes("점") && !s.bizesNm.includes("상점"));
+        if(isFranchise) g.franchise++;
+        if(["1", "1층", "지상1층"].includes(s.flrNo)) g.firstFloor++;
+    });
+
+    const totalInGroup = targetStores.length;
+    
+    return Object.values(groups).map((g: any) => ({
+        name: g.name,
+        count: g.count,
+        ratio: totalInGroup ? (g.count / totalInGroup) * 100 : 0,
+        franchiseCount: g.franchise,
+        franchiseRatio: g.count ? (g.franchise/g.count)*100 : 0,
+        firstFloorCount: g.firstFloor,
+        firstFloorRatio: g.count ? (g.firstFloor/g.count)*100 : 0,
+        topMid: "-" // Not used in this view
+    })).sort((a: any, b: any) => b.count - a.count);
+
+  }, [storeStats, detailedAnalysisFilter, allRawStores]);
+
   const reset = () => {
       setStep("input"); setAddress(""); setFoundZones([]); setTradeZone(null); 
       setAllRawStores([]); setStoreStats(null); setDataDate(null);
       setSelectedBuildingIndex(null);
+      setDetailedAnalysisFilter(null);
   };
 
   return (
@@ -510,30 +549,51 @@ const App: React.FC = () => {
                  <div className="bg-white rounded-xl shadow-sm border overflow-hidden">
                     <div className="p-6 border-b bg-gray-50 flex items-center justify-between">
                         <h3 className="text-lg font-bold text-gray-800 flex items-center gap-2">
-                            <Icons.TrendingUp className="text-blue-600"/> 업종별 종합 분석 (구성비 · 프랜차이즈 · 1층 비율)
+                            <Icons.TrendingUp className="text-blue-600"/> 
+                            {detailedAnalysisFilter ? (
+                                <span className="flex items-center gap-2">
+                                    <span className="text-gray-500">{detailedAnalysisFilter}</span>
+                                    <Icons.ArrowRight className="w-4 h-4 text-gray-400"/>
+                                    <span>세부 업종 분석</span>
+                                </span>
+                            ) : (
+                                "업종별 종합 분석 (구성비 · 프랜차이즈 · 1층 비율)"
+                            )}
                         </h3>
-                        <span className="text-xs text-gray-500">* 전체 상권 데이터 기준</span>
+                        {detailedAnalysisFilter ? (
+                             <button onClick={() => setDetailedAnalysisFilter(null)} className="text-sm bg-white border border-gray-300 px-3 py-1.5 rounded hover:bg-gray-50 flex items-center gap-1 transition text-gray-700 font-medium">
+                                <Icons.ArrowRight className="w-4 h-4 rotate-180" /> 대분류로 돌아가기
+                             </button>
+                        ) : (
+                            <span className="text-xs text-gray-500">* 전체 상권 데이터 기준</span>
+                        )}
                     </div>
                     <div className="overflow-x-auto custom-scrollbar">
                         <table className="w-full text-sm text-left whitespace-nowrap">
                             <thead className="bg-gray-100 text-gray-700 font-semibold">
                                 <tr>
-                                    <th className="px-6 py-3">업종 (대분류)</th>
-                                    <th className="px-6 py-3 text-right">점포수 (구성비)</th>
-                                    <th className="px-6 py-3">대표 세부업종</th>
+                                    <th className="px-6 py-3">업종 ({detailedAnalysisFilter ? '중분류' : '대분류'})</th>
+                                    <th className="px-6 py-3 text-right">점포수 ({detailedAnalysisFilter ? '그룹 내 비중' : '구성비'})</th>
+                                    {!detailedAnalysisFilter && <th className="px-6 py-3">대표 세부업종</th>}
                                     <th className="px-6 py-3 text-center">프랜차이즈 비율</th>
                                     <th className="px-6 py-3 text-center">1층 점포 비율</th>
                                 </tr>
                             </thead>
                             <tbody className="divide-y">
-                                {storeStats.summaryTableData.map((item, idx) => (
-                                    <tr key={idx} className="hover:bg-gray-50">
-                                        <td className="px-6 py-3 font-medium text-gray-900">{item.name}</td>
+                                {summaryTableDisplayData.map((item, idx) => (
+                                    <tr key={idx} 
+                                        className={`hover:bg-gray-50 transition-colors ${!detailedAnalysisFilter ? 'cursor-pointer group' : ''}`}
+                                        onClick={() => !detailedAnalysisFilter && setDetailedAnalysisFilter(item.name)}
+                                    >
+                                        <td className="px-6 py-3 font-medium text-gray-900 flex items-center gap-2">
+                                            {item.name}
+                                            {!detailedAnalysisFilter && <Icons.Search className="w-3 h-3 text-gray-300 opacity-0 group-hover:opacity-100 transition-opacity" />}
+                                        </td>
                                         <td className="px-6 py-3 text-right">
                                             <div className="font-bold">{item.count.toLocaleString()}개</div>
                                             <div className="text-xs text-gray-500">({item.ratio.toFixed(1)}%)</div>
                                         </td>
-                                        <td className="px-6 py-3 text-gray-600">{item.topMid}</td>
+                                        {!detailedAnalysisFilter && <td className="px-6 py-3 text-gray-600">{item.topMid}</td>}
                                         <td className="px-6 py-3">
                                             <div className="flex items-center justify-center gap-2">
                                                 <span className="w-12 text-right font-medium text-green-600">{item.franchiseRatio.toFixed(1)}%</span>
