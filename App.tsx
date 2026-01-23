@@ -9,9 +9,19 @@ import { Zone, Store, StoreStats } from './types';
 const COLORS = ['#3b82f6', '#10b981', '#f59e0b', '#ef4444', '#8b5cf6', '#ec4899'];
 const MAJOR_BRANDS = [
   "스타벅스", "투썸", "이디야", "메가MGC", "컴포즈", "빽다방", "할리스", "폴바셋", "공차",
-  "GS25", "CU", "세븐일레븐", "이마트24", "다이소", "올리브영", "롯데마트", "이마트",
-  "파리바게뜨", "뚜레쥬르", "던킨", "배스킨라빈스", "설빙",
-  "맥도날드", "버거킹", "롯데리아", "KFC", "맘스터치", "써브웨이", "교촌", "BHC", "BBQ", "도미노"
+  "지에스25", "GS25", "CU", "씨유", "세븐일레븐", "이마트24", "다이소", "올리브영", "롯데마트", "이마트",
+  "파리바게뜨", "뚜레쥬르", "던킨", "배스킨라빈스", "설빙", "베스킨라빈스", "VIPS", "빕스",
+  "맥도날드", "버거킹", "롯데리아", "KFC", "맘스터치", "써브웨이", "교촌", "BHC", "BBQ", "도미노",
+  "아웃백", "애슐리", "굽네치킨", "푸라닭", "60계치킨", 
+  "피자헛", "파파존스", "피자스쿨", 
+  "본죽", "한솥", "한솥도시락", "엽기떡볶이", "이삭토스트", 
+  "명륜진사갈비", "채선당", "역전할머니맥주",
+  "더벤티", "파스쿠찌", "크리스피크림",
+  "홈플러스", "코스트코", "노브랜드", "처갓집양념치킨", "페리카나", "멕시카나", "노랑통닭", "자담치킨", "60계치킨",
+  "피자알볼로", "피자스쿨", "반올림피자", "신전떡볶이", "죠스떡볶이", "바르다김선생", "김밥천국", "에그드랍",
+  "엔제리너스", "탐앤탐스", "커피빈", "쥬씨", "와플대학", "아마스빈",
+  "원할머니보쌈", "놀부부대찌개", "하남돼지집", "새마을식당", "투다리", "역전우동", "홍콩반점", "샐러디",
+  "프랭크버거", "신세계백화점", "현대백화점", "롯데백화점", "하이마트"
 ];
 
 // Utils
@@ -198,17 +208,33 @@ const App: React.FC = () => {
     const fullBarData = Object.keys(mCounts).map(k => ({ name: k, count: mCounts[k], value: mCounts[k] })).sort((a,b) => b.count - a.count);
     const buildingData = Object.keys(bCounts).map(k => ({ name: k, count: bCounts[k], value: bCounts[k], lat: bInfo[k]?.lat, lon: bInfo[k]?.lon })).sort((a,b) => b.count - a.count).slice(0, 5);
 
-    // Top Stores Logic
+    // Top Stores Logic with Priority: Major Brands > Estimated Franchise > Others
     const isMajor = (nm: string) => MAJOR_BRANDS.some(b => nm.includes(b));
+    const isFranchiseStore = (s: Store) => (s.brchNm && s.brchNm.trim() !== "") || (s.bizesNm.includes("점") && !s.bizesNm.includes("상점"));
+
     const sortedStores = [...filtered].sort((a, b) => {
-        const aMajor = isMajor(a.bizesNm) ? 1 : 0;
-        const bMajor = isMajor(b.bizesNm) ? 1 : 0;
-        if(aMajor !== bMajor) return bMajor - aMajor;
+        // Priority 1: Major Brand
+        const aMajor = isMajor(a.bizesNm);
+        const bMajor = isMajor(b.bizesNm);
         
+        if (aMajor && !bMajor) return -1;
+        if (!aMajor && bMajor) return 1;
+
+        // Priority 2: Estimated Franchise (if tied on Major status)
+        // If both are Major, they are equal here. If both are NOT Major, we check franchise status.
+        if (aMajor === bMajor) {
+            const aFran = isFranchiseStore(a);
+            const bFran = isFranchiseStore(b);
+            if (aFran && !bFran) return -1;
+            if (!aFran && bFran) return 1;
+        }
+        
+        // Priority 3: 1st Floor
         const aFloor1 = (a.flrNo === '1' || a.flrNo === '1층' || a.flrNo === '지상1층') ? 1 : 0;
         const bFloor1 = (b.flrNo === '1' || b.flrNo === '1층' || b.flrNo === '지상1층') ? 1 : 0;
         if(aFloor1 !== bFloor1) return bFloor1 - aFloor1;
 
+        // Priority 4: Has Branch Name (Secondary check if not caught by logic above)
         const aHasBranch = (a.brchNm && a.brchNm.trim()) ? 1 : 0;
         const bHasBranch = (b.brchNm && b.brchNm.trim()) ? 1 : 0;
         if (aHasBranch !== bHasBranch) return bHasBranch - aHasBranch;
@@ -286,7 +312,7 @@ const App: React.FC = () => {
       {/* Header */}
       <header className="mb-8 flex flex-col items-center justify-center gap-4 text-center relative">
          <div>
-            <h1 className="text-3xl font-bold text-gray-900 mb-2">🏪 상권 분석 대시보드</h1>
+            <h1 className="text-3xl font-bold text-gray-900 mb-2">🏪 상권 분석</h1>
             <p className="text-gray-500 flex items-center justify-center gap-2">
                 {dataDate && <span className="text-blue-600 font-medium bg-blue-50 px-2 py-1 rounded text-xs">{dataDate} 기준</span>}
             </p>
@@ -623,13 +649,14 @@ const App: React.FC = () => {
                     <div className="overflow-x-auto max-h-96 custom-scrollbar">
                        <table className="w-full text-left text-sm text-gray-600">
                           <thead className="bg-gray-100 text-gray-700 uppercase font-semibold sticky top-0">
-                             <tr><th className="px-6 py-3">상호명</th><th className="px-6 py-3">대분류</th><th className="px-6 py-3">중분류</th><th className="px-6 py-3">주소</th></tr>
+                             <tr><th className="px-6 py-3">순위</th><th className="px-6 py-3">상호명</th><th className="px-6 py-3">대분류</th><th className="px-6 py-3">중분류</th><th className="px-6 py-3">주소</th></tr>
                           </thead>
                           <tbody className="divide-y">
                              {topStores.map((s,i) => {
                                 const isMajorStore = MAJOR_BRANDS.some(brand => s.bizesNm.includes(brand));
                                 return (
                                     <tr key={i} className={`hover:bg-gray-50 ${isMajorStore ? 'bg-yellow-50' : ''}`}>
+                                       <td className="px-6 py-3 font-bold text-gray-500">{i + 1}</td>
                                        <td className="px-6 py-3 font-medium text-gray-900">
                                           <div className="flex items-center gap-2">
                                               {isMajorStore && <Icons.Star className="w-4 h-4 text-yellow-500 fill-yellow-500 flex-shrink-0" title="파워 브랜드" />}
@@ -646,7 +673,7 @@ const App: React.FC = () => {
                                     </tr>
                                 );
                              })}
-                             {topStores.length === 0 && <tr><td colSpan={4} className="px-6 py-8 text-center text-gray-400">프랜차이즈 데이터 없음</td></tr>}
+                             {topStores.length === 0 && <tr><td colSpan={5} className="px-6 py-8 text-center text-gray-400">프랜차이즈 데이터 없음</td></tr>}
                           </tbody>
                        </table>
                     </div>
