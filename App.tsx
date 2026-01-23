@@ -71,6 +71,9 @@ const App: React.FC = () => {
   const [selectedMid, setSelectedMid] = useState<string | null>(null);
   const [viewModeLarge, setViewModeLarge] = useState<'chart' | 'table'>('chart');
   const [viewModeMid, setViewModeMid] = useState<'chart' | 'table'>('chart');
+  
+  // Interactive Map State
+  const [selectedBuildingIndex, setSelectedBuildingIndex] = useState<number | null>(null);
 
   // Handlers
   const handleGeocode = async () => {
@@ -114,6 +117,7 @@ const App: React.FC = () => {
     setTradeZone(selectedZone);
     setStep('result');
     setSelectedLarge(null); setSelectedMid(null);
+    setSelectedBuildingIndex(null);
 
     try {
       // fetchStores returns both stores and the stdrYm extracted from response header
@@ -235,6 +239,7 @@ const App: React.FC = () => {
   const reset = () => {
       setStep("input"); setAddress(""); setFoundZones([]); setTradeZone(null); 
       setAllRawStores([]); setStoreStats(null); setDataDate(null);
+      setSelectedBuildingIndex(null);
   };
 
   return (
@@ -355,7 +360,14 @@ const App: React.FC = () => {
                        </div>
                     </div>
                     <div className="w-full h-80 bg-gray-100 border-b border-gray-200 relative z-0">
-                        <TradeMap lat={tradeZone.searchLat!} lon={tradeZone.searchLon!} polygonCoords={tradeZone.parsedPolygon} tradeName={tradeZone.mainTrarNm} markers={storeStats.buildingData}/>
+                        <TradeMap 
+                           lat={tradeZone.searchLat!} 
+                           lon={tradeZone.searchLon!} 
+                           polygonCoords={tradeZone.parsedPolygon} 
+                           tradeName={tradeZone.mainTrarNm} 
+                           markers={storeStats.buildingData}
+                           selectedMarkerIndex={selectedBuildingIndex}
+                        />
                     </div>
                  </div>
 
@@ -365,9 +377,14 @@ const App: React.FC = () => {
                          <h3 className="text-lg font-bold text-gray-800 mb-4 flex items-center gap-2"><Icons.Building className="text-indigo-500"/> 상가 밀집 건물 Top 5</h3>
                          <ul className="space-y-2">
                             {storeStats.buildingData.map((b,i) => (
-                               <li key={i} className="flex justify-between text-sm border-b pb-2 last:border-0">
-                                  <span className="truncate w-2/3">{i+1}. {b.name}</span>
-                                  <span className="font-bold text-indigo-600">{b.count}개</span>
+                               <li key={i} 
+                                   onClick={() => setSelectedBuildingIndex(selectedBuildingIndex === i ? null : i)}
+                                   className={`flex justify-between items-center text-sm border-b pb-2 last:border-0 cursor-pointer p-2 rounded transition-colors ${selectedBuildingIndex === i ? 'bg-blue-50 border-blue-200' : 'hover:bg-gray-50 border-transparent'}`}>
+                                  <span className="truncate w-2/3 flex items-center gap-2">
+                                     <span className={`inline-flex items-center justify-center w-5 h-5 rounded-full text-[10px] text-white ${selectedBuildingIndex === i ? 'bg-blue-500' : 'bg-red-500'}`}>{i+1}</span>
+                                     <span className={selectedBuildingIndex === i ? 'font-medium text-gray-900' : ''}>{b.name}</span>
+                                  </span>
+                                  <span className={`font-bold ${selectedBuildingIndex === i ? 'text-blue-600' : 'text-indigo-600'}`}>{b.count}개</span>
                                </li>
                             ))}
                          </ul>

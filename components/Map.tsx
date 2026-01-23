@@ -15,9 +15,10 @@ interface MapProps {
   draggable?: boolean;
   onDragEnd?: (lat: number, lon: number) => void;
   markers?: ChartData[];
+  selectedMarkerIndex?: number | null;
 }
 
-const TradeMap: React.FC<MapProps> = ({ lat, lon, polygonCoords, tradeName, draggable, onDragEnd, markers = [] }) => {
+const TradeMap: React.FC<MapProps> = ({ lat, lon, polygonCoords, tradeName, draggable, onDragEnd, markers = [], selectedMarkerIndex }) => {
     const mapRef = useRef<HTMLDivElement>(null);
     const mapInstanceRef = useRef<any>(null);
     const polygonLayerRef = useRef<any>(null);
@@ -109,14 +110,19 @@ const TradeMap: React.FC<MapProps> = ({ lat, lon, polygonCoords, tradeName, drag
                             <b>${m.name}</b><br>
                             <span style="color:#666;">(점포 ${m.count}개)</span>
                         </div>`);
+                    
                     extraMarkersRef.current.addLayer(marker);
+                    
+                    if (selectedMarkerIndex === idx) {
+                        setTimeout(() => marker.openPopup(), 100);
+                    }
                 }
             });
         }
 
         setTimeout(refreshMap, 300);
 
-    }, [lat, lon, polygonCoords, tradeName, draggable, markers, L]);
+    }, [lat, lon, polygonCoords, tradeName, draggable, markers, L, selectedMarkerIndex]);
 
     return <div ref={mapRef} className="w-full h-full min-h-[100px]" />;
 };
