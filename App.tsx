@@ -3,7 +3,7 @@ import { PieChart, Pie, Cell, BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveCo
 import * as Icons from './components/Icons';
 import TradeMap from './components/Map';
 import { searchAddress, searchZones, fetchStores } from './services/api';
-import { Zone, Store, StoreStats, ChartData } from './types';
+import { Zone, Store, StoreStats } from './types';
 
 // Constants
 const COLORS = ['#3b82f6', '#10b981', '#f59e0b', '#ef4444', '#8b5cf6', '#ec4899'];
@@ -75,7 +75,7 @@ const App: React.FC = () => {
   // Handlers
   const handleGeocode = async () => {
     if (!address) { setError("주소를 입력해주세요."); return; }
-    setLoading(true); setLoadingMsg("주소 위치를 확인 중..."); setError(null);
+    setLoading(true); setLoadingMsg("주소 위치를 확인하고 있습니다..."); setError(null);
     try {
       const item = await searchAddress(address);
       const lat = parseFloat(item.point.y);
@@ -91,7 +91,7 @@ const App: React.FC = () => {
   };
 
   const handleSearchZones = async () => {
-    setLoading(true); setLoadingMsg("주변 상권 검색 중..."); setError(null);
+    setLoading(true); setLoadingMsg("주변 상권 정보를 검색하고 있습니다..."); setError(null);
     try {
       const zones = await searchZones(searchCoords.lat, searchCoords.lon);
       const enhancedZones = zones.map(z => ({
@@ -110,7 +110,7 @@ const App: React.FC = () => {
   };
 
   const handleAnalyzeZone = async (selectedZone: Zone) => {
-    setLoading(true); setLoadingMsg("데이터 수집 중..."); setError(null);
+    setLoading(true); setLoadingMsg("상권 상세 데이터를 분석하고 있습니다..."); setError(null);
     setTradeZone(selectedZone);
     setStep('result');
     setSelectedLarge(null); setSelectedMid(null);
@@ -118,7 +118,6 @@ const App: React.FC = () => {
     try {
       const stores = await fetchStores(selectedZone.trarNo, (msg) => setLoadingMsg(msg));
       
-      // 날짜 파싱
       const rawDate = stores[0]?.stdrYm || selectedZone.stdrYm || "";
       const fmtDate = rawDate.length >= 6 ? `${rawDate.substring(0,4)}년 ${rawDate.substring(4,6)}월` : rawDate;
       setDataDate(fmtDate);
@@ -126,7 +125,7 @@ const App: React.FC = () => {
       setAllRawStores(stores);
       analyzeData(stores);
     } catch (err: any) {
-      setError("데이터 분석 실패: " + err.message);
+      setError("상세 데이터 로딩 실패: " + err.message);
     } finally {
       setLoading(false);
     }
@@ -183,14 +182,6 @@ const App: React.FC = () => {
        if((s.brchNm && s.brchNm.trim() !== "") || (s.bizesNm.includes("점") && !s.bizesNm.includes("상점"))) franchise++;
     });
 
-    const pieData = Object.keys(lCounts).map(k => ({ name: k, value: lCounts[k] })).sort((a,b) => b.value - a.value);
-    // If filtered, show breakdown of Mid categories in pie? No, keep logic simple.
-    // If largeFilter is active, pieData should effectively be 100% of that large category, but for UI stability we might keep global pie. 
-    // Let's stick to global pie for L-Cat, and bar for M-Cat.
-    
-    // For the Pie Chart, we usually want the distribution of Large Categories of the *current view*.
-    // But if a Large Filter is selected, the Pie Chart becomes boring (100%). 
-    // Let's keep the Pie Chart showing *All Stores* distribution always, to act as a selector.
     const globalLCounts: Record<string, number> = {};
     stores.forEach(s => globalLCounts[s.indsLclsNm || "기타"] = (globalLCounts[s.indsLclsNm || "기타"] || 0) + 1);
     const globalPieData = Object.keys(globalLCounts).map(k => ({ name: k, value: globalLCounts[k] })).sort((a,b) => b.value - a.value);
@@ -204,6 +195,15 @@ const App: React.FC = () => {
         const aMajor = isMajor(a.bizesNm) ? 1 : 0;
         const bMajor = isMajor(b.bizesNm) ? 1 : 0;
         if(aMajor !== bMajor) return bMajor - aMajor;
+        
+        const aFloor1 = (a.flrNo === '1' || a.flrNo === '1층' || a.flrNo === '지상1층') ? 1 : 0;
+        const bFloor1 = (b.flrNo === '1' || b.flrNo === '1층' || b.flrNo === '지상1층') ? 1 : 0;
+        if(aFloor1 !== bFloor1) return bFloor1 - aFloor1;
+
+        const aHasBranch = (a.brchNm && a.brchNm.trim()) ? 1 : 0;
+        const bHasBranch = (b.brchNm && b.brchNm.trim()) ? 1 : 0;
+        if (aHasBranch !== bHasBranch) return bHasBranch - aHasBranch;
+
         return (a.bizesNm || "").localeCompare(b.bizesNm || "");
     });
 
@@ -213,14 +213,13 @@ const App: React.FC = () => {
         barData: fullBarData.slice(0, 10),
         fullBarData,
         buildingData,
-        floorData: [{ name: '1층', value: fFloor }, { name: '그 외', value: filtered.length - fFloor }],
+        floorData: [{ name: '1층 점포', value: fFloor }, { name: '그 외 층', value: filtered.length - fFloor }],
         franchiseRate: filtered.length ? ((franchise/filtered.length)*100).toFixed(1) : "0",
         summaryTableData
     });
-    setTopStores(sortedStores.slice(0, 50));
+    setTopStores(sortedStores.slice(0, 30));
   };
 
-  // Re-analyze when filters change
   useEffect(() => {
     if(allRawStores.length > 0) analyzeData(allRawStores, selectedLarge, selectedMid);
   }, [selectedLarge, selectedMid, allRawStores]);
@@ -232,241 +231,354 @@ const App: React.FC = () => {
 
   const reset = () => {
       setStep("input"); setAddress(""); setFoundZones([]); setTradeZone(null); 
-      setAllRawStores([]); setStoreStats(null);
+      setAllRawStores([]); setStoreStats(null); setDataDate(null);
   };
 
   return (
     <div className="min-h-screen max-w-6xl mx-auto p-4 md:p-8">
       {/* Header */}
-      <header className="mb-8 text-center relative">
-         <h1 className="text-3xl font-bold text-gray-900 mb-2">🏪 상권 분석 대시보드</h1>
-         {dataDate && <span className="bg-blue-50 text-blue-600 px-2 py-1 rounded text-xs font-medium">{dataDate} 기준</span>}
+      <header className="mb-8 flex flex-col items-center justify-center gap-4 text-center relative">
+         <div>
+            <h1 className="text-3xl font-bold text-gray-900 mb-2">🏪 상권 분석 대시보드</h1>
+            <p className="text-gray-500 flex items-center justify-center gap-2">
+                {dataDate && <span className="text-blue-600 font-medium bg-blue-50 px-2 py-1 rounded text-xs">{dataDate} 기준</span>}
+            </p>
+         </div>
          {step !== 'input' && (
-             <button onClick={reset} className="absolute right-0 top-0 bg-gray-100 text-gray-600 px-3 py-1 rounded hover:bg-gray-200 text-sm flex items-center gap-1">
-                 <Icons.Search className="w-4 h-4"/> 검색 초기화
+             <button onClick={reset} className="md:absolute md:right-0 md:top-2 bg-gray-100 text-gray-600 px-4 py-2 rounded-lg hover:bg-gray-200 transition text-sm flex items-center gap-2">
+                 <Icons.Search className="w-4 h-4"/> 처음으로
              </button>
          )}
       </header>
 
       {/* 1. Input */}
       {step === 'input' && (
-        <div className="max-w-xl mx-auto bg-white p-8 rounded-2xl shadow-lg text-center mt-20">
-           <h2 className="text-xl font-bold mb-6">분석할 지역 주소를 입력하세요</h2>
-           <div className="flex gap-2">
-              <input value={address} onChange={e => setAddress(e.target.value)} onKeyDown={e => e.key === 'Enter' && handleGeocode()} className="flex-1 p-3 border rounded-xl outline-none focus:ring-2 focus:ring-blue-500" placeholder="예: 강남대로 000" />
-              <button onClick={handleGeocode} disabled={loading} className="bg-blue-600 text-white px-6 rounded-xl hover:bg-blue-700 font-bold">
-                 {loading ? "..." : "검색"}
-              </button>
+        <div className="bg-white rounded-2xl shadow-lg p-4 md:p-8 max-w-2xl mx-auto mt-10 md:mt-20 text-center animate-fade-in">
+           <h2 className="text-lg md:text-xl font-bold mb-4 md:mb-6">분석할 지역의 주소를 입력해주세요</h2>
+           <div className="flex flex-col gap-2 mb-4">
+              <div className="flex flex-col md:flex-row gap-2">
+                  <input value={address} onChange={e => setAddress(e.target.value)} onKeyDown={e => e.key === 'Enter' && handleGeocode()} className="w-full md:flex-1 p-3 md:p-4 border border-gray-300 rounded-xl text-base md:text-lg outline-none focus:ring-2 focus:ring-blue-500" placeholder="예: 테헤란로 000" />
+                  <button onClick={handleGeocode} disabled={loading} className="w-full md:w-auto bg-blue-600 text-white py-3 md:py-0 px-8 rounded-xl font-bold hover:bg-blue-700 disabled:bg-gray-400 transition flex items-center justify-center gap-2">
+                     {loading ? <div className="loading-spinner" /> : <><Icons.Search className="w-5 h-5 md:w-6 md:h-6"/><span className="md:hidden">검색</span></>}
+                  </button>
+              </div>
            </div>
-           {error && <p className="text-red-500 mt-4 text-sm">{error}</p>}
+           {error && <p className="text-red-500 text-sm mt-2">{error}</p>}
         </div>
       )}
 
       {/* 2. Verify Map */}
       {step === 'verify_location' && (
-        <div className="bg-white p-6 rounded-xl shadow-lg border border-blue-50">
-           <h3 className="font-bold text-lg mb-4 flex items-center gap-2"><Icons.MapPin className="text-blue-500"/> 위치 확인</h3>
-           <div className="h-80 w-full rounded-lg overflow-hidden border mb-4 relative z-0">
+        <div className="bg-white rounded-xl shadow-lg p-6 mb-8 border border-blue-100 animate-fade-in">
+           <h3 className="text-lg font-bold text-gray-800 mb-4 flex items-center gap-2"><Icons.MapPin className="text-blue-500"/> 검색 위치 확인</h3>
+           <p className="text-sm text-gray-600 mb-4">위치가 정확한지 확인하고, 필요하면 <strong>마커를 드래그</strong>하여 조정해주세요.</p>
+           <div className="h-80 w-full rounded-lg overflow-hidden border border-gray-300 mb-4 relative z-0">
               <TradeMap lat={searchCoords.lat} lon={searchCoords.lon} draggable={true} onDragEnd={(lat, lon) => setSearchCoords({lat, lon})} />
            </div>
-           <p className="text-center text-sm text-gray-600 mb-4">{resolvedAddress}</p>
-           <button onClick={handleSearchZones} className="w-full bg-blue-600 text-white py-3 rounded-lg font-bold hover:bg-blue-700">주변 상권 찾기</button>
+           <div className="text-sm text-gray-500 mb-4 bg-gray-50 p-3 rounded">검색 결과: <strong>{resolvedAddress}</strong></div>
+           <button onClick={handleSearchZones} disabled={loading} className="w-full bg-blue-600 text-white px-6 py-4 rounded-lg font-bold hover:bg-blue-700 transition flex items-center justify-center gap-2 shadow-lg">
+                {loading ? '상권 찾는 중...' : '📍 이 위치 주변 상권 분석하기'}
+           </button>
+           {error && <p className="text-red-500 text-sm mt-2 text-center">{error}</p>}
         </div>
       )}
 
       {/* 3. Zone Select */}
       {step === 'select_zone' && (
-         <div className="grid gap-4">
-            <h3 className="font-bold text-lg">상권을 선택하세요 ({foundZones.length}개)</h3>
-            {foundZones.map((z, i) => (
-                <div key={i} className={`border rounded-xl p-4 cursor-pointer transition ${previewZone?.trarNo === z.trarNo ? 'border-blue-500 bg-blue-50 ring-2 ring-blue-200' : 'hover:bg-gray-50'}`} onClick={() => setPreviewZone(prev => prev?.trarNo === z.trarNo ? null : z)}>
-                    <div className="flex justify-between items-center">
-                        <div>
-                            <span className="text-xs bg-blue-100 text-blue-700 px-2 py-0.5 rounded font-bold">No. {z.trarNo}</span>
-                            <h4 className="font-bold text-lg">{z.mainTrarNm}</h4>
-                            <p className="text-sm text-gray-500">{z.signguNm} | {Number(z.trarArea).toLocaleString()}㎡</p>
+         <div className="bg-white rounded-xl shadow-lg p-6 mb-8 border border-blue-100 animate-fade-in">
+            <h3 className="text-lg font-bold text-gray-800 mb-4 flex items-center gap-2"><Icons.List className="text-blue-500"/> 주변 상권 선택 ({foundZones.length}개)</h3>
+            <div className="grid grid-cols-1 gap-4">
+                {foundZones.map((z, i) => (
+                    <div key={i} className={`border rounded-xl p-4 transition-all duration-300 ${previewZone?.trarNo === z.trarNo ? 'border-blue-500 bg-blue-50 shadow-md' : 'hover:border-blue-300 bg-white hover:shadow-sm'}`}>
+                        <div onClick={() => setPreviewZone(prev => prev?.trarNo === z.trarNo ? null : z)} className="cursor-pointer flex justify-between items-center">
+                            <div>
+                                <div className="flex items-center gap-2 mb-1">
+                                    <span className="bg-blue-100 text-blue-700 text-xs px-2 py-1 rounded font-medium">상권번호 {z.trarNo}</span>
+                                    <h4 className="font-bold text-gray-800 text-lg">{z.mainTrarNm}</h4>
+                                </div>
+                                <div className="text-sm text-gray-500">{z.ctprvnNm} {z.signguNm} | {Number(z.trarArea).toLocaleString()}㎡</div>
+                            </div>
+                            {previewZone?.trarNo === z.trarNo ? <Icons.ChevronUp className="text-gray-400 w-6 h-6"/> : <Icons.ChevronDown className="text-gray-400 w-6 h-6"/>}
                         </div>
-                        {previewZone?.trarNo === z.trarNo ? <Icons.ChevronUp/> : <Icons.ChevronDown/>}
+                        {previewZone?.trarNo === z.trarNo && (
+                            <div className="mt-4 pt-4 border-t border-blue-200 animate-fade-in">
+                                 <div className="h-64 w-full rounded-lg overflow-hidden border border-gray-300 mb-3 relative z-0">
+                                    <TradeMap lat={z.searchLat!} lon={z.searchLon!} polygonCoords={z.parsedPolygon} tradeName={z.mainTrarNm}/>
+                                 </div>
+                                 <button onClick={(e) => { e.stopPropagation(); handleAnalyzeZone(z); }} className="w-full bg-blue-600 text-white px-6 py-3 rounded-lg font-bold hover:bg-blue-700 transition flex items-center justify-center gap-2">
+                                    이 상권 분석 시작 <Icons.ArrowRight className="w-4 h-4"/>
+                                 </button>
+                            </div>
+                        )}
                     </div>
-                    {previewZone?.trarNo === z.trarNo && (
-                        <div className="mt-4 pt-4 border-t border-blue-200">
-                             <div className="h-64 w-full rounded-lg overflow-hidden border mb-4 relative z-0">
-                                <TradeMap lat={z.searchLat!} lon={z.searchLon!} polygonCoords={z.parsedPolygon} tradeName={z.mainTrarNm}/>
-                             </div>
-                             <button onClick={(e) => { e.stopPropagation(); handleAnalyzeZone(z); }} className="w-full bg-blue-600 text-white py-3 rounded-lg font-bold hover:bg-blue-700">분석 시작</button>
-                        </div>
-                    )}
-                </div>
-            ))}
+                ))}
+            </div>
          </div>
       )}
 
       {/* 4. Dashboard */}
       {step === 'result' && storeStats && tradeZone && (
-         <div className="space-y-6 animate-fade-in">
-             {/* Filter Alert */}
-             {(selectedLarge || selectedMid) && (
-                <div className="bg-indigo-50 border-l-4 border-indigo-500 p-4 flex justify-between items-center rounded-r shadow-sm">
-                   <div className="text-indigo-700 text-sm font-medium">필터: {selectedLarge} {selectedMid && ` > ${selectedMid}`}</div>
-                   <button onClick={() => { setSelectedLarge(null); setSelectedMid(null); }} className="text-xs text-indigo-500 underline">초기화</button>
-                </div>
-             )}
-
-             {/* Main Card */}
-             <div className="bg-white rounded-xl shadow overflow-hidden">
-                <div className="bg-gradient-to-r from-blue-500 to-indigo-600 p-6 text-white flex justify-between items-center">
-                   <div>
-                      <h2 className="text-2xl font-bold">{tradeZone.mainTrarNm}</h2>
-                      <p className="text-sm opacity-90">{tradeZone.ctprvnNm} {tradeZone.signguNm}</p>
-                   </div>
-                   <div className="text-right">
-                      <p className="text-sm opacity-80">총 점포수</p>
-                      <p className="text-3xl font-bold">{storeStats.totalStores.toLocaleString()}</p>
-                   </div>
-                </div>
-                <div className="h-80 bg-gray-100 relative z-0">
-                    <TradeMap lat={tradeZone.searchLat!} lon={tradeZone.searchLon!} polygonCoords={tradeZone.parsedPolygon} tradeName={tradeZone.mainTrarNm} markers={storeStats.buildingData}/>
-                </div>
+         <div className="animate-fade-in">
+             <div className="flex border-b border-gray-200 mb-6 overflow-x-auto">
+                <button className={`tab-btn whitespace-nowrap active`}>
+                    <Icons.MapPin className="inline-block w-4 h-4 mr-1"/> 상권 현황
+                </button>
              </div>
 
-             {/* Summary Cards */}
-             <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-                 <div className="bg-white p-5 rounded-xl shadow border">
-                     <h4 className="font-bold text-gray-700 mb-3 flex items-center gap-2"><Icons.Building className="w-4 h-4"/> 상가 밀집 건물</h4>
-                     <ul className="space-y-2 text-sm">
-                        {storeStats.buildingData.map((b,i) => (
-                           <li key={i} className="flex justify-between border-b pb-1 last:border-0">
-                              <span className="truncate w-2/3">{i+1}. {b.name}</span>
-                              <span className="font-bold text-indigo-600">{b.count}개</span>
-                           </li>
-                        ))}
-                     </ul>
-                 </div>
-                 <div className="bg-white p-5 rounded-xl shadow border flex flex-col items-center justify-center">
-                     <h4 className="font-bold text-gray-700 mb-2">프랜차이즈 비율</h4>
-                     <div className="text-4xl font-extrabold text-green-500">{storeStats.franchiseRate}%</div>
-                     <p className="text-xs text-gray-400 mt-1">브랜드/체인점 추정</p>
-                 </div>
-                 <div className="bg-white p-5 rounded-xl shadow border flex flex-col items-center justify-center">
-                     <h4 className="font-bold text-gray-700 mb-2">1층 점포 비율</h4>
-                     <div className="text-4xl font-extrabold text-orange-500">
-                        {storeStats.totalStores ? ((storeStats.floorData[0].value/storeStats.totalStores)*100).toFixed(0) : 0}%
-                     </div>
-                     <p className="text-xs text-gray-400 mt-1">{storeStats.floorData[0].value}개 점포</p>
-                 </div>
-             </div>
+             <div className="space-y-6 animate-fade-in">
+                 {/* Filter Alert */}
+                 {(selectedLarge || selectedMid) && (
+                    <div className="bg-indigo-50 border-l-4 border-indigo-500 p-4 flex justify-between items-center rounded-r-lg shadow-sm">
+                       <div className="flex items-center text-sm text-indigo-700">
+                           <Icons.Filter className="h-5 w-5 mr-2 text-indigo-500"/>
+                           현재 <strong>{selectedLarge && `'${selectedLarge}'`} {selectedMid && ` > '${selectedMid}'`}</strong> 필터 적용 중
+                       </div>
+                       <button onClick={() => { setSelectedLarge(null); setSelectedMid(null); }} className="text-sm font-medium text-indigo-600 hover:underline">필터 해제</button>
+                    </div>
+                 )}
 
-             {/* Charts */}
-             <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                 {/* Pie Chart */}
-                 <div className="bg-white p-6 rounded-xl shadow border">
-                     <div className="flex justify-between mb-4">
-                        <h3 className="font-bold text-gray-800">업종별 비중 (대분류)</h3>
-                        <div className="flex bg-gray-100 rounded p-1">
-                           <button onClick={()=>setViewModeLarge('chart')} className={`p-1 ${viewModeLarge==='chart'?'bg-white shadow':''}`}><Icons.PieChartIcon className="w-4 h-4"/></button>
-                           <button onClick={()=>setViewModeLarge('table')} className={`p-1 ${viewModeLarge==='table'?'bg-white shadow':''}`}><Icons.List className="w-4 h-4"/></button>
-                        </div>
-                     </div>
-                     <div className="h-64">
-                        {viewModeLarge === 'chart' ? (
-                           <ResponsiveContainer>
-                              <PieChart>
-                                 {/* @ts-ignore */}
-                                 <Pie data={storeStats.pieData} activeIndex={activePieIndex} activeShape={renderActiveShape} dataKey="value" cx="50%" cy="50%" outerRadius={80} onClick={(d) => { setSelectedLarge(d.name === selectedLarge ? null : d.name); setSelectedMid(null); }}>
-                                    {storeStats.pieData.map((e,i) => <Cell key={i} fill={COLORS[i % COLORS.length]} fillOpacity={selectedLarge && selectedLarge !== e.name ? 0.3 : 1} />)}
-                                 </Pie>
-                                 <Tooltip/>
-                              </PieChart>
-                           </ResponsiveContainer>
-                        ) : (
-                           <div className="h-full overflow-y-auto custom-scrollbar">
-                              <table className="w-full text-sm text-left">
-                                 <tbody>
-                                    {storeStats.pieData.map((d,i) => (
-                                       <tr key={i} className={`cursor-pointer hover:bg-gray-50 ${selectedLarge===d.name?'bg-blue-50':''}`} onClick={()=>{setSelectedLarge(d.name===selectedLarge?null:d.name); setSelectedMid(null);}}>
-                                          <td className="p-2 border-b">{d.name}</td>
-                                          <td className="p-2 border-b text-right font-bold">{d.value}</td>
-                                       </tr>
-                                    ))}
-                                 </tbody>
-                              </table>
-                           </div>
-                        )}
-                     </div>
+                 {/* Main Card */}
+                 <div className="bg-white rounded-xl shadow-lg overflow-hidden">
+                    <div className="bg-gradient-to-r from-blue-500 to-indigo-600 p-6 text-white flex flex-col md:flex-row justify-between items-center">
+                       <div>
+                          <h2 className="text-3xl font-bold mb-1">{tradeZone.mainTrarNm}</h2>
+                          <p className="opacity-90 text-sm flex items-center gap-1"><Icons.MapPin className="w-4 h-4"/> {tradeZone.ctprvnNm} {tradeZone.signguNm}</p>
+                       </div>
+                       <div className="text-right mt-4 md:mt-0">
+                          <p className="text-sm opacity-75">
+                            {(selectedLarge || selectedMid) ? '필터링된 점포' : `총 점포수 ${dataDate ? `(${dataDate} 기준)` : ''}`}
+                          </p>
+                          <p className="text-4xl font-bold">{storeStats.totalStores.toLocaleString()}<span className="text-xl">개</span></p>
+                       </div>
+                    </div>
+                    <div className="w-full h-80 bg-gray-100 border-b border-gray-200 relative z-0">
+                        <TradeMap lat={tradeZone.searchLat!} lon={tradeZone.searchLon!} polygonCoords={tradeZone.parsedPolygon} tradeName={tradeZone.mainTrarNm} markers={storeStats.buildingData}/>
+                    </div>
                  </div>
-                 
-                 {/* Bar Chart */}
-                 <div className="bg-white p-6 rounded-xl shadow border">
-                     <div className="flex justify-between mb-4">
-                        <h3 className="font-bold text-gray-800">상세 업종 Top 10</h3>
-                        <div className="flex bg-gray-100 rounded p-1">
-                           <button onClick={()=>setViewModeMid('chart')} className={`p-1 ${viewModeMid==='chart'?'bg-white shadow':''}`}><Icons.BarChart2 className="w-4 h-4"/></button>
-                           <button onClick={()=>setViewModeMid('table')} className={`p-1 ${viewModeMid==='table'?'bg-white shadow':''}`}><Icons.List className="w-4 h-4"/></button>
-                        </div>
+
+                 {/* Summary Cards */}
+                 <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+                     <div className="bg-white p-6 rounded-xl shadow-sm border">
+                         <h3 className="text-lg font-bold text-gray-800 mb-4 flex items-center gap-2"><Icons.Building className="text-indigo-500"/> 상가 밀집 건물 Top 5</h3>
+                         <ul className="space-y-2">
+                            {storeStats.buildingData.map((b,i) => (
+                               <li key={i} className="flex justify-between text-sm border-b pb-2 last:border-0">
+                                  <span className="truncate w-2/3">{i+1}. {b.name}</span>
+                                  <span className="font-bold text-indigo-600">{b.count}개</span>
+                               </li>
+                            ))}
+                         </ul>
                      </div>
-                     <div className="h-64">
-                         {viewModeMid === 'chart' ? (
-                            <ResponsiveContainer>
-                               <BarChart layout="vertical" data={storeStats.barData}>
-                                  <XAxis type="number" hide/>
-                                  <YAxis dataKey="name" type="category" width={90} tick={{fontSize:11}}/>
-                                  <Tooltip/>
-                                  <Bar dataKey="count" fill="#82ca9d" radius={[0,4,4,0]} onClick={(d) => setSelectedMid(d.name === selectedMid ? null : d.name)}>
-                                     {storeStats.barData.map((e,i) => <Cell key={i} fill={COLORS[i % COLORS.length]} fillOpacity={selectedMid && selectedMid !== e.name ? 0.3 : 1}/>)}
-                                  </Bar>
-                               </BarChart>
+                     <div className="bg-white p-6 rounded-xl shadow-sm border">
+                         <h3 className="text-lg font-bold text-gray-800 mb-4 flex items-center gap-2"><Icons.Layers className="text-orange-500"/> 1층 점포 비율</h3>
+                         <div className="h-40 w-full relative static-chart">
+                            <ResponsiveContainer width="100%" height="100%">
+                                <PieChart>
+                                    <Pie data={storeStats.floorData} cx="50%" cy="50%" innerRadius={40} outerRadius={60} dataKey="value">
+                                        <Cell fill="#f97316"/> <Cell fill="#e2e8f0"/>
+                                    </Pie>
+                                </PieChart>
                             </ResponsiveContainer>
-                         ) : (
-                            <div className="h-full overflow-y-auto custom-scrollbar">
-                               <table className="w-full text-sm text-left">
-                                  <tbody>
-                                     {storeStats.fullBarData.map((d,i) => (
-                                        <tr key={i} className={`cursor-pointer hover:bg-gray-50 ${selectedMid===d.name?'bg-green-50':''}`} onClick={()=>setSelectedMid(d.name===selectedMid?null:d.name)}>
-                                           <td className="p-2 border-b text-xs text-gray-400">{i+1}</td>
-                                           <td className="p-2 border-b">{d.name}</td>
-                                           <td className="p-2 border-b text-right">{d.count}</td>
-                                        </tr>
-                                     ))}
-                                  </tbody>
-                               </table>
+                            <div className="absolute inset-0 flex items-center justify-center pointer-events-none pb-4">
+                                <span className="text-xl font-bold text-gray-700">{storeStats.totalStores > 0 ? ((storeStats.floorData[0].value/storeStats.totalStores)*100).toFixed(0) : 0}%</span>
                             </div>
-                         )}
+                         </div>
+                     </div>
+                     <div className="bg-white p-6 rounded-xl shadow-sm border flex flex-col justify-center items-center text-center">
+                         <div className="w-full flex items-center gap-2 mb-2 px-2">
+                            <Icons.Store className="text-green-500 h-5 w-5 flex-shrink-0" />
+                            <h3 className="text-lg font-bold text-gray-800 whitespace-nowrap">프랜차이즈 비율</h3>
+                         </div>
+                         <div className="flex-1 flex flex-col justify-center items-center py-2">
+                             <div className="text-5xl font-extrabold text-green-500 mb-2">{storeStats.franchiseRate}%</div>
+                             <p className="text-sm text-gray-500">전체 점포 중 프랜차이즈형<br/>점포로 추정되는 비율</p>
+                         </div>
                      </div>
                  </div>
-             </div>
 
-             {/* Store List */}
-             <div className="bg-white rounded-xl shadow border overflow-hidden">
-                <div className="p-4 bg-gray-50 border-b font-bold text-gray-700">📌 주요 점포 리스트 (Top 50)</div>
-                <div className="overflow-x-auto max-h-96 custom-scrollbar">
-                   <table className="w-full text-sm text-left whitespace-nowrap">
-                      <thead className="bg-gray-100 text-gray-600 sticky top-0">
-                         <tr><th className="p-3">상호명</th><th className="p-3">업종</th><th className="p-3">주소</th></tr>
-                      </thead>
-                      <tbody>
-                         {topStores.map((s,i) => (
-                            <tr key={i} className="hover:bg-gray-50 border-b last:border-0">
-                               <td className="p-3 font-medium">
-                                  {s.bizesNm}
-                                  {s.brchNm && <span className="ml-2 text-xs bg-gray-100 px-1.5 py-0.5 rounded text-gray-600">{s.brchNm}</span>}
-                                  {["1","1층"].includes(s.flrNo) && <span className="ml-1 text-xs bg-orange-100 text-orange-600 px-1 rounded">1F</span>}
-                               </td>
-                               <td className="p-3 text-gray-500">{s.indsMclsNm}</td>
-                               <td className="p-3 text-gray-400 text-xs">{s.rdnmAdr}</td>
-                            </tr>
-                         ))}
-                      </tbody>
-                   </table>
-                </div>
+                 {/* Charts */}
+                 <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                     <div className="bg-white p-6 rounded-xl shadow-sm border clickable-chart">
+                         <div className="flex justify-between items-center mb-4 border-l-4 border-blue-500 pl-3">
+                            <h3 className="text-lg font-bold text-gray-800">업종별 구성비 (대분류)</h3>
+                            <div className="flex bg-gray-100 rounded-lg p-1">
+                               <button onClick={()=>setViewModeLarge('chart')} className={`p-1.5 rounded ${viewModeLarge==='chart'?'bg-white shadow-sm text-blue-600':'text-gray-400 hover:text-gray-600'}`} title="차트로 보기"><Icons.PieChartIcon className="w-5 h-5"/></button>
+                               <button onClick={()=>setViewModeLarge('table')} className={`p-1.5 rounded ${viewModeLarge==='table'?'bg-white shadow-sm text-blue-600':'text-gray-400 hover:text-gray-600'}`} title="표로 보기"><Icons.List className="w-5 h-5"/></button>
+                            </div>
+                         </div>
+                         <div className="h-64 w-full overflow-hidden">
+                            {viewModeLarge === 'chart' ? (
+                               <ResponsiveContainer width="100%" height="100%">
+                                  <PieChart>
+                                     {/* @ts-ignore */}
+                                     <Pie data={storeStats.pieData} activeIndex={activePieIndex} activeShape={renderActiveShape} dataKey="value" cx="50%" cy="50%" outerRadius={80} onClick={(d) => { setSelectedLarge(d.name === selectedLarge ? null : d.name); setSelectedMid(null); }} label={({ name, percent }) => `${name} ${(percent * 100).toFixed(0)}%`}>
+                                        {storeStats.pieData.map((e,i) => <Cell key={i} fill={COLORS[i % COLORS.length]} fillOpacity={selectedLarge && selectedLarge !== e.name ? 0.3 : 1} />)}
+                                     </Pie>
+                                     <Tooltip/>
+                                  </PieChart>
+                               </ResponsiveContainer>
+                            ) : (
+                               <div className="h-full overflow-y-auto custom-scrollbar">
+                                  <table className="w-full text-sm text-left">
+                                     <thead className="bg-gray-50 text-gray-600 sticky top-0 font-medium">
+                                         <tr><th className="px-3 py-2">대분류명</th><th className="px-3 py-2 text-right">점포수</th><th className="px-3 py-2 text-right">비율</th></tr>
+                                     </thead>
+                                     <tbody className="divide-y">
+                                        {storeStats.pieData.map((d,i) => (
+                                           <tr key={i} className={`cursor-pointer hover:bg-gray-50 ${selectedLarge===d.name?'bg-blue-50':''}`} onClick={()=>{setSelectedLarge(d.name===selectedLarge?null:d.name); setSelectedMid(null);}}>
+                                              <td className="px-3 py-2">{d.name}</td>
+                                              <td className="px-3 py-2 text-right font-medium">{d.value.toLocaleString()}</td>
+                                              <td className="px-3 py-2 text-right text-gray-500">{((d.value / storeStats.totalStores) * 100).toFixed(1)}%</td>
+                                           </tr>
+                                        ))}
+                                     </tbody>
+                                  </table>
+                               </div>
+                            )}
+                         </div>
+                     </div>
+                     
+                     <div className="bg-white p-6 rounded-xl shadow-sm border clickable-chart">
+                         <div className="flex justify-between items-center mb-4 border-l-4 border-green-500 pl-3">
+                            <h3 className="text-lg font-bold text-gray-800">{viewModeMid === 'chart' ? '세부 업종 Top 10 (중분류)' : '세부 업종 전체 리스트 (중분류)'}</h3>
+                            <div className="flex bg-gray-100 rounded-lg p-1">
+                               <button onClick={()=>setViewModeMid('chart')} className={`p-1.5 rounded ${viewModeMid==='chart'?'bg-white shadow-sm text-green-600':'text-gray-400 hover:text-gray-600'}`} title="차트로 보기"><Icons.BarChart2 className="w-5 h-5"/></button>
+                               <button onClick={()=>setViewModeMid('table')} className={`p-1.5 rounded ${viewModeMid==='table'?'bg-white shadow-sm text-green-600':'text-gray-400 hover:text-gray-600'}`} title="표로 보기"><Icons.List className="w-5 h-5"/></button>
+                            </div>
+                         </div>
+                         <div className="h-64 w-full overflow-hidden">
+                             {viewModeMid === 'chart' ? (
+                                <ResponsiveContainer width="100%" height="100%">
+                                   <BarChart layout="vertical" data={storeStats.barData}>
+                                      <XAxis type="number" hide/>
+                                      <YAxis dataKey="name" type="category" width={100} tick={{fontSize:12}}/>
+                                      <Tooltip/>
+                                      <Bar dataKey="count" fill="#82ca9d" radius={[0,4,4,0]} onClick={(d) => setSelectedMid(d.name === selectedMid ? null : d.name)}>
+                                         {storeStats.barData.map((e,i) => <Cell key={i} fill={COLORS[i % COLORS.length]} fillOpacity={selectedMid && selectedMid !== e.name ? 0.3 : 1}/>)}
+                                      </Bar>
+                                   </BarChart>
+                                </ResponsiveContainer>
+                             ) : (
+                                <div className="h-full overflow-y-auto custom-scrollbar">
+                                   <table className="w-full text-sm text-left">
+                                      <thead className="bg-gray-50 text-gray-600 sticky top-0 font-medium">
+                                          <tr><th className="px-3 py-2">순위</th><th className="px-3 py-2">중분류명</th><th className="px-3 py-2 text-right">점포수</th><th className="px-3 py-2 text-right">그래프</th></tr>
+                                      </thead>
+                                      <tbody className="divide-y">
+                                         {storeStats.fullBarData.map((d,i) => (
+                                            <tr key={i} className={`cursor-pointer hover:bg-gray-50 ${selectedMid===d.name?'bg-green-50':''}`} onClick={()=>setSelectedMid(d.name===selectedMid?null:d.name)}>
+                                               <td className="px-3 py-2 text-gray-400 text-xs">{i+1}</td>
+                                               <td className="px-3 py-2">{d.name}</td>
+                                               <td className="px-3 py-2 text-right font-medium">{d.count.toLocaleString()}</td>
+                                               <td className="px-3 py-2 text-right">
+                                                    <div className="h-2 bg-gray-100 rounded-full w-20 ml-auto overflow-hidden">
+                                                        <div className="h-full rounded-full" style={{width: `${(d.count / storeStats.fullBarData[0].count) * 100}%`, backgroundColor: COLORS[i % COLORS.length]}}></div>
+                                                    </div>
+                                               </td>
+                                            </tr>
+                                         ))}
+                                      </tbody>
+                                   </table>
+                                </div>
+                             )}
+                         </div>
+                     </div>
+                 </div>
+
+                 {/* Comprehensive Analysis Table (New) */}
+                 <div className="bg-white rounded-xl shadow-sm border overflow-hidden">
+                    <div className="p-6 border-b bg-gray-50 flex items-center justify-between">
+                        <h3 className="text-lg font-bold text-gray-800 flex items-center gap-2">
+                            <Icons.TrendingUp className="text-blue-600"/> 업종별 종합 분석 (구성비 · 프랜차이즈 · 1층 비율)
+                        </h3>
+                        <span className="text-xs text-gray-500">* 전체 상권 데이터 기준</span>
+                    </div>
+                    <div className="overflow-x-auto custom-scrollbar">
+                        <table className="w-full text-sm text-left whitespace-nowrap">
+                            <thead className="bg-gray-100 text-gray-700 font-semibold">
+                                <tr>
+                                    <th className="px-6 py-3">업종 (대분류)</th>
+                                    <th className="px-6 py-3 text-right">점포수 (구성비)</th>
+                                    <th className="px-6 py-3">대표 세부업종</th>
+                                    <th className="px-6 py-3 text-center">프랜차이즈 비율</th>
+                                    <th className="px-6 py-3 text-center">1층 점포 비율</th>
+                                </tr>
+                            </thead>
+                            <tbody className="divide-y">
+                                {storeStats.summaryTableData.map((item, idx) => (
+                                    <tr key={idx} className="hover:bg-gray-50">
+                                        <td className="px-6 py-3 font-medium text-gray-900">{item.name}</td>
+                                        <td className="px-6 py-3 text-right">
+                                            <div className="font-bold">{item.count.toLocaleString()}개</div>
+                                            <div className="text-xs text-gray-500">({item.ratio.toFixed(1)}%)</div>
+                                        </td>
+                                        <td className="px-6 py-3 text-gray-600">{item.topMid}</td>
+                                        <td className="px-6 py-3">
+                                            <div className="flex items-center justify-center gap-2">
+                                                <span className="w-12 text-right font-medium text-green-600">{item.franchiseRatio.toFixed(1)}%</span>
+                                                <div className="w-24 h-2 bg-gray-200 rounded-full overflow-hidden">
+                                                    <div className="h-full bg-green-500 rounded-full" style={{width: `${item.franchiseRatio}%`}}></div>
+                                                </div>
+                                            </div>
+                                        </td>
+                                        <td className="px-6 py-3">
+                                            <div className="flex items-center justify-center gap-2">
+                                                <span className="w-12 text-right font-medium text-orange-600">{item.firstFloorRatio.toFixed(1)}%</span>
+                                                <div className="w-24 h-2 bg-gray-200 rounded-full overflow-hidden">
+                                                    <div className="h-full bg-orange-500 rounded-full" style={{width: `${item.firstFloorRatio}%`}}></div>
+                                                </div>
+                                            </div>
+                                        </td>
+                                    </tr>
+                                ))}
+                            </tbody>
+                        </table>
+                    </div>
+                 </div>
+
+                 {/* Store List */}
+                 <div className="bg-white rounded-xl shadow-sm border overflow-hidden">
+                    <div className="p-6 border-b bg-gray-50"><h3 className="text-lg font-bold text-gray-800">📌 주요 프랜차이즈 및 유명 브랜드 (Top 30)</h3></div>
+                    <div className="overflow-x-auto max-h-96 custom-scrollbar">
+                       <table className="w-full text-left text-sm text-gray-600">
+                          <thead className="bg-gray-100 text-gray-700 uppercase font-semibold sticky top-0">
+                             <tr><th className="px-6 py-3">상호명</th><th className="px-6 py-3">대분류</th><th className="px-6 py-3">중분류</th><th className="px-6 py-3">주소</th></tr>
+                          </thead>
+                          <tbody className="divide-y">
+                             {topStores.map((s,i) => {
+                                const isMajorStore = MAJOR_BRANDS.some(brand => s.bizesNm.includes(brand));
+                                return (
+                                    <tr key={i} className={`hover:bg-gray-50 ${isMajorStore ? 'bg-yellow-50' : ''}`}>
+                                       <td className="px-6 py-3 font-medium text-gray-900">
+                                          <div className="flex items-center gap-2">
+                                              {isMajorStore && <Icons.Star className="w-4 h-4 text-yellow-500 fill-yellow-500 flex-shrink-0" title="파워 브랜드" />}
+                                              <span>{s.bizesNm}</span>
+                                          </div>
+                                          <div className="mt-1 flex gap-1">
+                                              {s.brchNm && <span className="text-xs text-blue-600 bg-blue-50 px-1.5 py-0.5 rounded">지점: {s.brchNm}</span>}
+                                              {["1","1층","지상1층"].includes(s.flrNo) && <span className="text-xs text-orange-600 bg-orange-100 px-1.5 py-0.5 rounded font-medium">1F</span>}
+                                          </div>
+                                       </td>
+                                       <td className="px-6 py-3"><span className="bg-gray-100 text-gray-800 px-2 py-1 rounded text-xs">{s.indsLclsNm}</span></td>
+                                       <td className="px-6 py-3">{s.indsMclsNm}</td>
+                                       <td className="px-6 py-3 text-gray-500 truncate max-w-xs" title={s.rdnmAdr}>{s.rdnmAdr}</td>
+                                    </tr>
+                                );
+                             })}
+                             {topStores.length === 0 && <tr><td colSpan={4} className="px-6 py-8 text-center text-gray-400">프랜차이즈 데이터 없음</td></tr>}
+                          </tbody>
+                       </table>
+                    </div>
+                 </div>
              </div>
          </div>
       )}
 
       {loading && (
-          <div className="fixed inset-0 bg-black/60 flex items-center justify-center z-50">
-             <div className="bg-white p-6 rounded-2xl shadow-2xl flex items-center gap-4">
-                 <div className="w-6 h-6 border-4 border-blue-200 border-t-blue-600 rounded-full animate-spin"></div>
-                 <span className="font-bold text-gray-700">{loadingMsg}</span>
+          <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50">
+             <div className="bg-white p-6 rounded-xl shadow-xl flex items-center gap-4">
+                 <div className="loading-spinner" />
+                 <span className="text-gray-800 font-medium">{loadingMsg}</span>
              </div>
           </div>
       )}

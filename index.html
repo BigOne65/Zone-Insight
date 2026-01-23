@@ -17,11 +17,39 @@
 
     <style>
         body { font-family: 'Pretendard', sans-serif; background-color: #f8fafc; }
+        
+        /* 로딩 스피너 */
+        .loading-spinner {
+            border: 3px solid #e2e8f0;
+            border-top: 3px solid #3b82f6;
+            border-radius: 50%;
+            width: 24px;
+            height: 24px;
+            animation: spin 1s linear infinite;
+        }
+        @keyframes spin { 0% { transform: rotate(0deg); } 100% { transform: rotate(360deg); } }
+
+        /* 탭 스타일 */
+        .tab-btn { @apply px-4 py-2 font-medium text-sm rounded-t-lg transition-colors; }
+        .tab-btn.active { @apply bg-white text-blue-600 border-b-2 border-blue-600; }
+        .tab-btn.inactive { @apply text-gray-500 hover:text-gray-700 hover:bg-gray-50; }
+
+        /* 스크롤바 */
         .custom-scrollbar::-webkit-scrollbar { width: 6px; height: 6px; }
         .custom-scrollbar::-webkit-scrollbar-track { background: #f1f1f1; }
         .custom-scrollbar::-webkit-scrollbar-thumb { background: #cbd5e1; border-radius: 3px; }
+
+        /* 애니메이션 */
+        .animate-fade-in { animation: fadeIn 0.5s ease-out; }
+        @keyframes fadeIn { from { opacity: 0; transform: translateY(10px); } to { opacity: 1; transform: translateY(0); } }
+        
         /* Leaflet custom marker style */
         .custom-div-icon { background: transparent; border: none; }
+
+        /* 차트 인터랙션 스타일 */
+        .clickable-chart .recharts-pie-sector:hover { cursor: pointer; opacity: 0.8; }
+        .clickable-chart .recharts-bar-rectangle:hover { cursor: pointer; opacity: 0.8; }
+        .static-chart .recharts-pie-sector:hover { cursor: default; opacity: 1; }
     </style>
 <script type="importmap">
 {
@@ -38,7 +66,6 @@
 </head>
 <body>
     <div id="root"></div>
-    <!-- 아래 줄이 React 앱을 실행시키는 열쇠입니다! -->
     <script type="module" src="/index.tsx"></script>
 </body>
 </html>
