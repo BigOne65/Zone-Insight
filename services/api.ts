@@ -151,12 +151,13 @@ export const searchZones = async (lat: number, lon: number): Promise<Zone[]> => 
 };
 
 // Data.go.kr Store List
-export const fetchStores = async (zoneNo: string, onProgress: (msg: string) => void): Promise<Store[]> => {
+export const fetchStores = async (zoneNo: string, onProgress: (msg: string) => void): Promise<{ stores: Store[], stdrYm: string }> => {
     if (!DATA_API_KEY) throw new Error("API Key Missing");
 
     const PAGE_SIZE = 500;
     let allStores: Store[] = [];
     let totalCount = 0;
+    let stdrYm = "";
 
     const firstUrl = `${BASE_URL}/storeListInArea?key=${zoneNo}&numOfRows=${PAGE_SIZE}&pageNo=1&serviceKey=${DATA_API_KEY}&type=json`;
     const firstText = await fetchWithRetry(firstUrl);
@@ -164,6 +165,10 @@ export const fetchStores = async (zoneNo: string, onProgress: (msg: string) => v
     try {
         const listJson = JSON.parse(firstText);
         
+        // Extract Reference Date from header
+        if (listJson.header && listJson.header.stdrYm) stdrYm = String(listJson.header.stdrYm);
+        else if (listJson.response && listJson.response.header && listJson.response.header.stdrYm) stdrYm = String(listJson.response.header.stdrYm);
+
         let items = null;
         if (listJson.body && listJson.body.items) items = listJson.body.items;
         else if (listJson.response && listJson.response.body && listJson.response.body.items) items = listJson.response.body.items;
@@ -175,7 +180,6 @@ export const fetchStores = async (zoneNo: string, onProgress: (msg: string) => v
             else totalCount = allStores.length;
         }
     } catch (e) {
-        // XML Fallback handled similarly to zones if needed, but omitted for brevity
         console.warn("JSON Parse failed for stores, might use XML fallback in production");
     }
 
@@ -198,5 +202,5 @@ export const fetchStores = async (zoneNo: string, onProgress: (msg: string) => v
         }
     }
 
-    return allStores;
+    return { stores: allStores, stdrYm };
 };

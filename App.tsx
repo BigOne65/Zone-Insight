@@ -116,12 +116,15 @@ const App: React.FC = () => {
     setSelectedLarge(null); setSelectedMid(null);
 
     try {
-      const stores = await fetchStores(selectedZone.trarNo, (msg) => setLoadingMsg(msg));
+      // fetchStores returns both stores and the stdrYm extracted from response header
+      const { stores, stdrYm } = await fetchStores(selectedZone.trarNo, (msg) => setLoadingMsg(msg));
       
-      const rawDate = stores[0]?.stdrYm || selectedZone.stdrYm || "";
-      const fmtDate = rawDate.length >= 6 ? `${rawDate.substring(0,4)}년 ${rawDate.substring(4,6)}월` : rawDate;
+      // Date Fallback Logic: Response Header > First Store Item > Zone Info
+      const rawDate = stdrYm || stores[0]?.stdrYm || selectedZone.stdrYm || "";
+      const cleanDate = rawDate.replace(/[^0-9]/g, '');
+      const fmtDate = cleanDate.length >= 6 ? `${cleanDate.substring(0,4)}년 ${cleanDate.substring(4,6)}월` : rawDate;
+      
       setDataDate(fmtDate);
-      
       setAllRawStores(stores);
       analyzeData(stores);
     } catch (err: any) {
