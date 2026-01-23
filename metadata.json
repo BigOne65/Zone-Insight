@@ -1,0 +1,5 @@
+{
+  "name": "Commercial Area Analyzer",
+  "description": "Integrated commercial area analysis dashboard using public data APIs (V-World, Data.go.kr).",
+  "requestFramePermissions": []
+}
