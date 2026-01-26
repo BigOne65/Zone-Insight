@@ -311,16 +311,37 @@ const App: React.FC = () => {
   return (
     <div className="min-h-screen max-w-6xl mx-auto p-3 md:p-8">
       {/* Header */}
-      <header className="mb-8 flex flex-col items-center justify-center gap-4 text-center relative">
-         <div>
-            <h1 className="text-3xl font-bold text-gray-900 mb-2">🏪 상권 분석</h1>
-            <p className="text-gray-500 flex items-center justify-center gap-2">
-                {dataDate && <span className="text-blue-600 font-medium bg-blue-50 px-2 py-1 rounded text-xs">{dataDate} 기준</span>}
-            </p>
+      <header className="mb-10 flex flex-col items-center justify-center gap-4 text-center relative pt-4 md:pt-8">
+         <div 
+            onClick={reset} 
+            className="cursor-pointer group flex flex-col items-center justify-center select-none"
+            role="button"
+            aria-label="메인 화면으로 이동"
+         >
+            <div className="flex items-center gap-3 mb-2 transition-transform duration-300 group-hover:-translate-y-1">
+                <div className="bg-gradient-to-br from-blue-600 to-indigo-600 p-2.5 rounded-xl shadow-lg shadow-blue-200">
+                    <Icons.Store className="w-6 h-6 md:w-8 md:h-8 text-white" strokeWidth={2.5} />
+                </div>
+                <h1 className="text-3xl md:text-4xl font-black text-gray-800 tracking-tight">
+                    <span className="bg-clip-text text-transparent bg-gradient-to-r from-blue-700 to-indigo-600">상권</span>분석
+                </h1>
+            </div>
+            <div className="h-6 flex items-center justify-center">
+                {dataDate ? (
+                    <span className="text-blue-700 font-semibold bg-blue-50 px-3 py-0.5 rounded-full text-xs border border-blue-100 flex items-center gap-1 animate-fade-in">
+                        <Icons.TrendingUp className="w-3 h-3"/> {dataDate} 데이터 기준
+                    </span>
+                ) : (
+                    <p className="text-sm text-gray-400 font-light tracking-wide group-hover:text-blue-500 transition-colors">Commercial Area Analysis Service</p>
+                )}
+            </div>
          </div>
+         
          {step !== 'input' && (
-             <button onClick={reset} className="md:absolute md:right-0 md:top-2 bg-gray-100 text-gray-600 px-4 py-2 rounded-lg hover:bg-gray-200 transition text-sm flex items-center gap-2">
-                 <Icons.Search className="w-4 h-4"/> 처음으로
+             <button onClick={reset} className="md:absolute md:right-0 md:top-10 bg-white border border-gray-200 text-gray-600 px-5 py-2.5 rounded-full hover:bg-gray-50 hover:border-blue-200 hover:text-blue-600 hover:shadow-md transition-all text-sm font-medium flex items-center gap-2 group/btn">
+                 <Icons.Search className="w-4 h-4 text-gray-400 group-hover/btn:text-blue-500"/> 
+                 <span className="hidden md:inline">다른 지역 검색</span>
+                 <span className="md:hidden">재검색</span>
              </button>
          )}
       </header>
