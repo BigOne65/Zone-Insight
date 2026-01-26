@@ -249,14 +249,38 @@ export const fetchLocalAdminPolygon = async (zone: Zone): Promise<number[][][]> 
                 return [];
             }
             
+            console.log("[Shapefile Debug] Loading local shapefile (BND_ADM_DONG_PG_simple.zip)...");
+            
             try {
+                // Direct fetch to validate file existence and type before parsing
+                const response = await fetch('/BND_ADM_DONG_PG_simple.zip');
+                
+                if (!response.ok) {
+                    throw new Error(`Failed to fetch zip file: ${response.status} ${response.statusText}`);
+                }
+                
+                // Check if we got HTML back (common in SPAs for 404s)
+                const contentType = response.headers.get('content-type');
+                if (contentType && contentType.includes('text/html')) {
+                    throw new Error("File not found: The server returned HTML instead of a ZIP file. Please ensure 'BND_ADM_DONG_PG_simple.zip' is in the public folder.");
+                }
+
+                const arrayBuffer = await response.arrayBuffer();
+                
+                if (arrayBuffer.byteLength === 0) {
+                     throw new Error("File is empty.");
+                }
+
                 // @ts-ignore
-                const geojson = await window.shp('/BND_ADM_DONG_PG_simple.zip');
+                const geojson = await window.shp(arrayBuffer);
+                
                 if (Array.isArray(geojson)) cachedFeatures = geojson.flatMap(g => g.features);
                 else cachedFeatures = geojson.features;
                 
+                console.log(`[Shapefile Debug] Loaded. Total features: ${cachedFeatures?.length}`);
+
             } catch (err) {
-                console.error("Error loading/parsing ZIP file:", err);
+                console.error("[Shapefile Debug] ❌ Error loading/parsing ZIP file:", err);
                 return [];
             }
         }
