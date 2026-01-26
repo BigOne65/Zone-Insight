@@ -266,15 +266,29 @@ export const fetchLocalAdminPolygon = async (zone: Zone): Promise<number[][][]> 
                 console.error("shpjs library not loaded");
                 return [];
             }
-            console.log("Loading local shapefile (BND_ADM_DONG_PG_simple.zip)...");
-            // @ts-ignore
-            const geojson = await window.shp('/BND_ADM_DONG_PG_simple.zip');
-            if (Array.isArray(geojson)) cachedFeatures = geojson.flatMap(g => g.features);
-            else cachedFeatures = geojson.features;
+            console.log("[Shapefile Debug] Loading local shapefile (BND_ADM_DONG_PG_simple.zip)...");
             
-            console.log(`Shapefile loaded. Total features: ${cachedFeatures?.length}`);
-            if (cachedFeatures && cachedFeatures.length > 0) {
-                 console.log("First feature props:", cachedFeatures[0].properties);
+            try {
+                // @ts-ignore
+                const geojson = await window.shp('/BND_ADM_DONG_PG_simple.zip');
+                if (Array.isArray(geojson)) cachedFeatures = geojson.flatMap(g => g.features);
+                else cachedFeatures = geojson.features;
+                
+                console.log(`[Shapefile Debug] Loaded. Total features: ${cachedFeatures?.length}`);
+                
+                if (cachedFeatures && cachedFeatures.length > 0) {
+                     const firstProps = cachedFeatures[0].properties;
+                     console.log("[Shapefile Debug] First feature properties:", firstProps);
+                     
+                     // Encoding check
+                     const sampleName = String(firstProps['ADM_DR_NM'] || firstProps['adm_dr_nm'] || firstProps['ADM_NM'] || firstProps['adm_nm'] || "");
+                     if (sampleName.includes("")) {
+                        console.error("[Shapefile Debug] ⚠️ ENCODING ERROR DETECTED! The text seems broken (e.g. ''). Please check if .cpg file exists and contains 'EUC-KR' or 'CP949'.");
+                     }
+                }
+            } catch (err) {
+                console.error("[Shapefile Debug] ❌ Error loading/parsing ZIP file:", err);
+                return [];
             }
         }
         
@@ -284,6 +298,8 @@ export const fetchLocalAdminPolygon = async (zone: Zone): Promise<number[][][]> 
         // zone.mainTrarNm format: "Sido Sigungu Dong"
         const nameParts = zone.mainTrarNm.split(" ");
         const dongName = nameParts.length >= 1 ? nameParts[nameParts.length - 1] : "";
+        
+        console.log(`[Shapefile Debug] Searching for dong: "${dongName}"`);
 
         // 3. Filter Candidates by Name
         // Use ADM_DR_NM as per PDF spec
@@ -294,6 +310,8 @@ export const fetchLocalAdminPolygon = async (zone: Zone): Promise<number[][][]> 
             return name === dongName; 
         });
 
+        console.log(`[Shapefile Debug] Found ${candidates.length} candidates for "${dongName}"`);
+
         let targetFeature = null;
 
         if (candidates.length === 1) {
@@ -302,7 +320,7 @@ export const fetchLocalAdminPolygon = async (zone: Zone): Promise<number[][][]> 
             // 4. Disambiguate using Distance (Find closest to search location)
             // Need searchCoords (lat, lon) which we stored in Zone
             if (zone.searchLat && zone.searchLon) {
-                console.log(`Found ${candidates.length} candidates for ${dongName}. Checking distance to (${zone.searchLat}, ${zone.searchLon})...`);
+                console.log(`[Shapefile Debug] Disambiguating via distance to (${zone.searchLat}, ${zone.searchLon})...`);
                 
                 let minDist = Infinity;
                 
@@ -336,18 +354,20 @@ export const fetchLocalAdminPolygon = async (zone: Zone): Promise<number[][][]> 
                         }
                     }
                 }
+                console.log(`[Shapefile Debug] Closest feature selected. DistanceSq: ${minDist}`);
             } else {
                 // Fallback: just pick first
+                console.warn("[Shapefile Debug] No search coordinates available, picking first candidate.");
                 targetFeature = candidates[0];
             }
         }
 
         if (!targetFeature) {
-             console.warn(`Polygon NOT found for: ${dongName} (Candidates: ${candidates.length})`);
+             console.warn(`[Shapefile Debug] Polygon NOT found for: ${dongName}`);
              return [];
         }
 
-        console.log(`Polygon MATCHED: ${targetFeature.properties.ADM_DR_NM || targetFeature.properties.adm_dr_nm}`);
+        console.log(`[Shapefile Debug] ✅ Polygon MATCHED: ${targetFeature.properties.ADM_DR_NM || targetFeature.properties.adm_dr_nm}`);
 
         // 5. Process Geometry & Reproject
         let coords: any[] = [];
@@ -375,7 +395,7 @@ export const fetchLocalAdminPolygon = async (zone: Zone): Promise<number[][][]> 
             );
         }
     } catch (e) {
-        console.warn("Failed to load/parse local shapefile:", e);
+        console.warn("[Shapefile Debug] Unexpected error in fetchLocalAdminPolygon:", e);
     }
     return [];
 };
