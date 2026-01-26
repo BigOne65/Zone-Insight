@@ -15,6 +15,10 @@ export interface Zone {
   searchLat?: number;
   searchLon?: number;
   parsedPolygon?: number[][][];
+  // New fields for Admin Analysis
+  type?: 'trade' | 'admin'; // 'trade' = 주요상권, 'admin' = 행정구역
+  adminCode?: string;       // 행정동 코드 or 시군구 코드
+  adminLevel?: string;      // 'adongCd' or 'signguCd'
 }
 
 export interface Store {

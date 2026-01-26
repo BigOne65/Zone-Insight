@@ -27,7 +27,6 @@ const DATA_API_KEY = getEnvVar("VITE_DATA_API_KEY");
 const VWORLD_KEY = getEnvVar("VITE_VWORLD_KEY");
 
 const BASE_URL = "http://apis.data.go.kr/B553077/api/open/sdsc2";
-// [변경] V-World URL을 상수로 분리했습니다.
 const VWORLD_BASE_URL = "https://api.vworld.kr/req/search";
 
 // Helper: JSONP for V-World
@@ -82,7 +81,6 @@ export const searchAddress = async (address: string): Promise<any> => {
     let errorDetails: string[] = [];
     
     const runSearch = async (searchType: string, category?: string) => {
-        // [변경] 분리한 상수(VWORLD_BASE_URL)를 사용하도록 수정
         let baseUrl = `${VWORLD_BASE_URL}?service=search&request=search&version=2.0&crs=EPSG:4326&size=10&page=1&query=${encodeURIComponent(address)}&type=${searchType}&format=json&errorformat=json&key=${VWORLD_KEY}`;
         if (category) baseUrl += `&category=${category}`;
         
@@ -112,7 +110,8 @@ export const searchAddress = async (address: string): Promise<any> => {
     throw new Error(`검색 실패: ${detailMsg}`);
 };
 
-// Data.go.kr Zone Search
+// --- Trade Zone Analysis (Default) ---
+
 export const searchZones = async (lat: number, lon: number): Promise<Zone[]> => {
     if (!DATA_API_KEY) throw new Error("Data.go.kr API Key가 설정되지 않았습니다.");
 
@@ -125,7 +124,7 @@ export const searchZones = async (lat: number, lon: number): Promise<Zone[]> => 
     try {
         const zoneJson = JSON.parse(zoneText);
         if (zoneJson.body && zoneJson.body.items) {
-            zones = zoneJson.body.items;
+            zones = zoneJson.body.items.map((item: any) => ({ ...item, type: 'trade' }));
         }
     } catch (e) {
         // XML Fallback
@@ -141,7 +140,8 @@ export const searchZones = async (lat: number, lon: number): Promise<Zone[]> => 
                 signguNm: items[i].getElementsByTagName("signguNm")[0]?.textContent || "",
                 coords: items[i].getElementsByTagName("coords")[0]?.textContent || "",
                 stdrYm: items[i].getElementsByTagName("stdrYm")[0]?.textContent || "",
-                stdrDt: items[i].getElementsByTagName("stdrDt")[0]?.textContent || ""
+                stdrDt: items[i].getElementsByTagName("stdrDt")[0]?.textContent || "",
+                type: 'trade'
             });
         }
     }
@@ -150,7 +150,6 @@ export const searchZones = async (lat: number, lon: number): Promise<Zone[]> => 
     return zones;
 };
 
-// Data.go.kr Store List
 export const fetchStores = async (zoneNo: string, onProgress: (msg: string) => void): Promise<{ stores: Store[], stdrYm: string }> => {
     if (!DATA_API_KEY) throw new Error("API Key Missing");
 
@@ -165,7 +164,6 @@ export const fetchStores = async (zoneNo: string, onProgress: (msg: string) => v
     try {
         const listJson = JSON.parse(firstText);
         
-        // Extract Reference Date from header
         if (listJson.header && listJson.header.stdrYm) stdrYm = String(listJson.header.stdrYm);
         else if (listJson.response && listJson.response.header && listJson.response.header.stdrYm) stdrYm = String(listJson.response.header.stdrYm);
 
@@ -180,7 +178,7 @@ export const fetchStores = async (zoneNo: string, onProgress: (msg: string) => v
             else totalCount = allStores.length;
         }
     } catch (e) {
-        console.warn("JSON Parse failed for stores, might use XML fallback in production");
+        console.warn("JSON Parse failed for stores, might use XML fallback");
     }
 
     const totalPages = Math.ceil(totalCount / PAGE_SIZE);
@@ -198,7 +196,136 @@ export const fetchStores = async (zoneNo: string, onProgress: (msg: string) => v
                 }
             } catch (e) {}
             onProgress(`${i} / ${loopLimit} 페이지 수집 중...`);
-            await new Promise(r => setTimeout(r, 100)); // Rate limit safety
+            await new Promise(r => setTimeout(r, 100));
+        }
+    }
+
+    return { stores: allStores, stdrYm };
+};
+
+// --- Administrative District Analysis (Op #19 baroApi & Op #8 storeListInDong) ---
+
+const fetchBaroApi = async (resId: string, catId: string, extraParams: string = "") => {
+    const url = `${BASE_URL}/baroApi?resId=${resId}&catId=${catId}&type=json&serviceKey=${DATA_API_KEY}${extraParams}`;
+    const text = await fetchWithRetry(url);
+    try {
+        const json = JSON.parse(text);
+        if (json.body && json.body.items) return Array.isArray(json.body.items) ? json.body.items : [json.body.items];
+        if (json.items) return Array.isArray(json.items) ? json.items : [json.items]; // Some formats might differ
+        return [];
+    } catch (e) {
+        return [];
+    }
+};
+
+export const searchAdminDistrict = async (addressStr: string): Promise<Zone[]> => {
+    // 1. Parse Address using rudimentary logic or V-World response structure
+    // Expect format like: "서울특별시 강남구 역삼동..."
+    const parts = addressStr.split(" ");
+    const sidoName = parts[0];
+    const sigunguName = parts[1];
+    const dongName = parts.length > 2 ? parts[2] : "";
+
+    if (!sidoName) throw new Error("주소 형식을 확인할 수 없습니다.");
+
+    // 2. Find Sido Code (baroApi Op #19-1)
+    const sidos = await fetchBaroApi('dong', 'mega');
+    const targetSido = sidos.find((s: any) => s.ctprvnNm.includes(sidoName) || sidoName.includes(s.ctprvnNm));
+    
+    if (!targetSido) throw new Error(`행정구역(시도)을 찾을 수 없습니다: ${sidoName}`);
+    const ctprvnCd = targetSido.ctprvnCd;
+
+    let targetZone: Zone = {
+        trarNo: ctprvnCd, // Temporary ID
+        mainTrarNm: targetSido.ctprvnNm,
+        ctprvnNm: targetSido.ctprvnNm,
+        signguNm: "",
+        trarArea: "0",
+        coords: "", // No polygon for admin district in this API
+        type: 'admin',
+        adminCode: ctprvnCd,
+        adminLevel: 'ctprvnCd' // default
+    };
+
+    // 3. Find Sigungu Code (baroApi Op #19-2)
+    if (sigunguName) {
+        const sigungus = await fetchBaroApi('dong', 'cty', `&ctprvnCd=${ctprvnCd}`);
+        const targetSigungu = sigungus.find((s: any) => s.signguNm.includes(sigunguName));
+        
+        if (targetSigungu) {
+            targetZone.mainTrarNm = `${targetSido.ctprvnNm} ${targetSigungu.signguNm}`;
+            targetZone.signguNm = targetSigungu.signguNm;
+            targetZone.adminCode = targetSigungu.signguCd;
+            targetZone.adminLevel = 'signguCd';
+
+            // 4. Find Dong Code (baroApi Op #19-3)
+            // Only search Dong if Sigungu was found
+            if (dongName) {
+                const dongs = await fetchBaroApi('dong', 'admi', `&signguCd=${targetSigungu.signguCd}`);
+                // Simple matching for Dong name
+                const targetDong = dongs.find((d: any) => d.adongNm.includes(dongName));
+                
+                if (targetDong) {
+                    targetZone.mainTrarNm = `${targetSido.ctprvnNm} ${targetSigungu.signguNm} ${targetDong.adongNm}`;
+                    targetZone.adminCode = targetDong.adongCd;
+                    targetZone.adminLevel = 'adongCd';
+                }
+            }
+        }
+    }
+
+    return [targetZone];
+};
+
+// Op #8 storeListInDong
+export const fetchStoresInAdmin = async (adminCode: string, divId: string, onProgress: (msg: string) => void): Promise<{ stores: Store[], stdrYm: string }> => {
+    if (!DATA_API_KEY) throw new Error("API Key Missing");
+
+    // divId must be one of: ctprvnCd, signguCd, adongCd
+    const PAGE_SIZE = 500;
+    let allStores: Store[] = [];
+    let totalCount = 0;
+    let stdrYm = "";
+
+    const firstUrl = `${BASE_URL}/storeListInDong?divId=${divId}&key=${adminCode}&numOfRows=${PAGE_SIZE}&pageNo=1&serviceKey=${DATA_API_KEY}&type=json`;
+    const firstText = await fetchWithRetry(firstUrl);
+
+    try {
+        const listJson = JSON.parse(firstText);
+        if (listJson.header && listJson.header.stdrYm) stdrYm = String(listJson.header.stdrYm);
+        else if (listJson.response && listJson.response.header && listJson.response.header.stdrYm) stdrYm = String(listJson.response.header.stdrYm);
+
+        let items = null;
+        if (listJson.body && listJson.body.items) items = listJson.body.items;
+        else if (listJson.response && listJson.response.body && listJson.response.body.items) items = listJson.response.body.items;
+
+        if (items) {
+            allStores = Array.isArray(items) ? items : [items];
+            if (listJson.body && listJson.body.totalCount) totalCount = listJson.body.totalCount;
+            else if (listJson.response && listJson.response.body && listJson.response.body.totalCount) totalCount = listJson.response.body.totalCount;
+            else totalCount = allStores.length;
+        }
+    } catch (e) {
+        console.warn("JSON Parse failed for admin stores");
+    }
+
+    // Pagination (Limit to 5 pages for admin query as data can be huge)
+    const totalPages = Math.ceil(totalCount / PAGE_SIZE);
+    const MAX_PAGES = 5; 
+    const loopLimit = Math.min(totalPages, MAX_PAGES);
+
+    if (loopLimit > 1) {
+        for (let i = 2; i <= loopLimit; i++) {
+            const nextUrl = `${BASE_URL}/storeListInDong?divId=${divId}&key=${adminCode}&numOfRows=${PAGE_SIZE}&pageNo=${i}&serviceKey=${DATA_API_KEY}&type=json`;
+            try {
+                const nextText = await fetchWithRetry(nextUrl);
+                const nextJson = JSON.parse(nextText);
+                if (nextJson.body && nextJson.body.items) {
+                    allStores = [...allStores, ...nextJson.body.items];
+                }
+            } catch (e) {}
+            onProgress(`${i} / ${loopLimit} 페이지 수집 중... (행정구역 데이터)`);
+            await new Promise(r => setTimeout(r, 200)); // Safer rate limit
         }
     }
 
