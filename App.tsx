@@ -318,7 +318,7 @@ const App: React.FC = () => {
             role="button"
             aria-label="메인 화면으로 이동"
          >
-            <div className="flex items-center gap-3 mb-2 transition-transform duration-300 group-hover:-translate-y-1">
+            <div className="flex items-center gap-3 mb-4 transition-transform duration-300 group-hover:-translate-y-1">
                 <div className="bg-gradient-to-br from-blue-600 to-indigo-600 p-2.5 rounded-xl shadow-lg shadow-blue-200">
                     <Icons.Store className="w-6 h-6 md:w-8 md:h-8 text-white" strokeWidth={2.5} />
                 </div>
@@ -355,7 +355,7 @@ const App: React.FC = () => {
               <div className="flex flex-col md:flex-row gap-2">
                   <input value={address} onChange={e => setAddress(e.target.value)} onKeyDown={e => e.key === 'Enter' && handleGeocode()} className="w-full md:flex-1 p-3 md:p-4 border border-gray-300 rounded-xl text-base md:text-lg outline-none focus:ring-2 focus:ring-blue-500" placeholder="예: 테헤란로 000" />
                   <button onClick={handleGeocode} disabled={loading} className="w-full md:w-auto bg-blue-600 text-white py-3 md:py-0 px-8 rounded-xl font-bold hover:bg-blue-700 disabled:bg-gray-400 transition flex items-center justify-center gap-2">
-                     {loading ? <div className="loading-spinner" /> : <><Icons.Search className="w-5 h-5 md:w-6 md:h-6"/><span className="md:hidden">검색</span></>}
+                     {loading ? <div className="loading-spinner" /> : <><Icons.Search className="w-5 h-5 md:w-6 md:h-6"/><span>검색</span></>}
                   </button>
               </div>
            </div>
