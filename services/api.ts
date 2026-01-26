@@ -3,12 +3,14 @@ import { Zone, Store } from '../types';
 // Declare proj4 global
 declare const proj4: any;
 
-// Define Common Korean Coordinate Systems
+// Define Coordinate Systems
+const PROJ_WGS84 = 'EPSG:4326';
+// SGIS uses UTM-K (GRS80)
 const PROJ_5179 = "+proj=tmerc +lat_0=38 +lon_0=127.5 +k=0.9996 +x_0=1000000 +y_0=2000000 +ellps=GRS80 +towgs84=0,0,0,0,0,0,0 +units=m +no_defs";
-const PROJ_5174 = "+proj=tmerc +lat_0=38 +lon_0=127.0028902777778 +k=1 +x_0=200000 +y_0=500000 +ellps=bessel +units=m +no_defs +towgs84=-115.80,474.99,674.11,1.16,-2.31,-1.63,6.43";
 
 /**
  * 환경 변수 로드 헬퍼
+ * .env 파일이 없어도 빌드 타임/런타임 환경 변수(Vercel 등)에서 값을 읽어옵니다.
  */
 const getEnvVar = (key: string): string => {
     // @ts-ignore
@@ -21,8 +23,15 @@ const getEnvVar = (key: string): string => {
 
 const DATA_API_KEY = getEnvVar("VITE_DATA_API_KEY");
 const VWORLD_KEY = getEnvVar("VITE_VWORLD_KEY");
-const BASE_URL = "http://apis.data.go.kr/B553077/api/open/sdsc2";
+const SGIS_ID = getEnvVar("VITE_SGIS_SERVICE_ID");
+const SGIS_SECRET = getEnvVar("VITE_SGIS_SECRET_KEY");
+
+const BASE_URL = "https://apis.data.go.kr/B553077/api/open/sdsc2";
 const VWORLD_BASE_URL = "https://api.vworld.kr/req/search";
+const SGIS_BASE_URL = "https://sgisapi.kostat.go.kr/OpenAPI3";
+
+// --- Cache ---
+const polygonCache = new Map<string, number[][][]>();
 
 // --- Network Helpers ---
 
@@ -65,10 +74,48 @@ const fetchWithRetry = async (targetUrl: string): Promise<string> => {
     throw new Error("All proxies failed");
 };
 
+// --- SGIS Helpers ---
+
+let sgisAccessToken: string | null = null;
+let tokenExpiry: number = 0;
+
+const getSgisToken = async (): Promise<string> => {
+    // Return cached token if valid (buffer 5 mins)
+    if (sgisAccessToken && Date.now() < tokenExpiry - 300000) {
+        return sgisAccessToken;
+    }
+
+    if (!SGIS_ID || !SGIS_SECRET || SGIS_ID.startsWith("YOUR")) {
+        throw new Error("SGIS API Key가 설정되지 않았습니다. 환경 변수를 확인해주세요.");
+    }
+
+    const url = `${SGIS_BASE_URL}/auth/authentication.json?consumer_key=${SGIS_ID}&consumer_secret=${SGIS_SECRET}`;
+    
+    let response;
+    try {
+        const proxyUrl = `https://corsproxy.io/?${encodeURIComponent(url)}`;
+        response = await fetch(proxyUrl);
+    } catch {
+        const proxyUrl = `https://api.allorigins.win/raw?url=${encodeURIComponent(url)}`;
+        response = await fetch(proxyUrl);
+    }
+
+    const data = await response.json();
+    if (data.errCd === 0 && data.result) {
+        sgisAccessToken = data.result.accessToken;
+        // Token typically lasts 4 hours. AccessTimeout is in ms usually.
+        const timeoutMs = parseInt(data.result.accessTimeout, 10) || 14400000;
+        tokenExpiry = Date.now() + timeoutMs;
+        return sgisAccessToken as string;
+    } else {
+        throw new Error(`SGIS Auth Error: ${data.errMsg}`);
+    }
+};
+
 // --- API Functions ---
 
 export const searchAddress = async (address: string): Promise<any> => {
-    if (!VWORLD_KEY) throw new Error("V-World API Key가 설정되지 않았습니다.");
+    if (!VWORLD_KEY || VWORLD_KEY.startsWith("YOUR")) throw new Error("V-World API Key가 설정되지 않았습니다.");
     let errorDetails: string[] = [];
     const runSearch = async (searchType: string, category?: string) => {
         let baseUrl = `${VWORLD_BASE_URL}?service=search&request=search&version=2.0&crs=EPSG:4326&size=10&page=1&query=${encodeURIComponent(address)}&type=${searchType}&format=json&errorformat=json&key=${VWORLD_KEY}`;
@@ -93,7 +140,7 @@ export const searchAddress = async (address: string): Promise<any> => {
 };
 
 export const searchZones = async (lat: number, lon: number): Promise<Zone[]> => {
-    if (!DATA_API_KEY) throw new Error("공공데이터포털 API Key가 설정되지 않았습니다.");
+    if (!DATA_API_KEY || DATA_API_KEY.startsWith("YOUR")) throw new Error("공공데이터포털 API Key가 설정되지 않았습니다.");
     const SEARCH_RADIUS = 500;
     const zoneUrl = `${BASE_URL}/storeZoneInRadius?radius=${SEARCH_RADIUS}&cx=${lon}&cy=${lat}&serviceKey=${DATA_API_KEY}&type=json`;
     const zoneText = await fetchWithRetry(zoneUrl);
@@ -226,186 +273,85 @@ export const searchAdminDistrict = async (sido: string, sigungu: string, dong: s
     return adminZones;
 };
 
-// --- Shapefile Helpers ---
-
-let cachedFeatures: any[] | null = null;
-
-const projectPoint = (x: number, y: number): [number, number] => {
-    let srcProj = PROJ_5179; 
-    if (x < 600000) srcProj = PROJ_5174;
-    
-    if (typeof proj4 !== 'undefined') {
-        const [lon, lat] = proj4(srcProj, 'EPSG:4326', [x, y]);
-        return [lat, lon];
-    }
-    return [y, x];
-};
-
-const getDistSq = (lat1: number, lon1: number, lat2: number, lon2: number) => {
-    return Math.pow(lat1 - lat2, 2) + Math.pow(lon1 - lon2, 2);
-};
+// --- SGIS Based Polygon Fetcher ---
 
 export const fetchLocalAdminPolygon = async (zone: Zone): Promise<number[][][]> => {
+    // 1. Check Cache
+    if (polygonCache.has(zone.mainTrarNm)) {
+        console.log(`[SGIS] 캐시된 경계 데이터 사용: ${zone.mainTrarNm}`);
+        return polygonCache.get(zone.mainTrarNm)!;
+    }
+
     try {
-        if (!cachedFeatures) {
-            // @ts-ignore
-            if (typeof window.shp === 'undefined') {
-                console.error("shpjs library not loaded");
-                return [];
-            }
-            
-            console.log("[Shapefile] 로컬 Shapefile 직접 로딩 및 검증 중...");
-            
-            // 1. 직접 fetch를 수행하여 ArrayBuffer를 가져옵니다.
-            const [shpRes, dbfRes] = await Promise.all([
-                fetch('/shapefiles/BND_ADM_DONG_PG_simple.shp'),
-                fetch('/shapefiles/BND_ADM_DONG_PG_simple.dbf')
-            ]);
-            
-            if (!shpRes.ok || !dbfRes.ok) {
-                console.error(`[Shapefile] 파일을 찾을 수 없습니다. SHP: ${shpRes.status}, DBF: ${dbfRes.status}`);
-                console.warn("중요: 'public/shapefiles/' 폴더에 파일이 있는지 확인하세요.");
-                return [];
-            }
-
-            const shpBuf = await shpRes.arrayBuffer();
-            const dbfBuf = await dbfRes.arrayBuffer();
-            
-            // 2. 데이터 유효성 검사 (Magic Number 체크)
-            // Shapefile(.shp)의 첫 4바이트는 9994 (Big Endian) 여야 합니다.
-            // 만약 HTML(404 Page)이 반환되었다면 9994가 아닐 것입니다.
-            const view = new DataView(shpBuf);
-            // File Code: 0x0000270A (9994 in decimal)
-            const fileCode = view.getInt32(0, false); 
-            
-            if (fileCode !== 9994) {
-                console.error(`[Shapefile Error] 파일 헤더가 올바르지 않습니다. (File Code: ${fileCode})`);
-                
-                // HTML인지 확인
-                const textDecoder = new TextDecoder('utf-8');
-                const startText = textDecoder.decode(shpBuf.slice(0, 50));
-                if (startText.trim().startsWith('<') || startText.includes('html') || startText.includes('DOCTYPE')) {
-                    console.error("[Shapefile Error] 바이너리 파일 대신 HTML 페이지가 반환되었습니다.");
-                    console.error("원인: 'public/shapefiles/BND_ADM_DONG_PG_simple.shp' 경로에 실제 파일이 없어서 404 페이지가 다운로드 되었습니다.");
-                    console.warn("해결책: 프로젝트의 public 폴더에 shapefiles 폴더를 만들고 파일을 넣어주세요.");
-                }
-                return [];
-            }
-
-            // 3. 바이너리 데이터를 파싱합니다.
-            // @ts-ignore
-            const geometries = window.shp.parseShp(shpBuf);
-            // @ts-ignore
-            const properties = window.shp.parseDbf(dbfBuf); 
-            
-            // 4. 수동으로 GeoJSON FeatureCollection 생성
-            if (geometries && properties && geometries.length === properties.length) {
-                const features = geometries.map((geo: any, i: number) => ({
-                    type: "Feature",
-                    geometry: geo,
-                    properties: properties[i] || {}
-                }));
-                cachedFeatures = features;
-                console.log(`[Shapefile] 성공적으로 로드됨: ${cachedFeatures?.length}개 행정구역`);
-            } else if (geometries) {
-                cachedFeatures = geometries.map((geo: any) => ({
-                    type: "Feature",
-                    geometry: geo,
-                    properties: {}
-                }));
-                 console.log(`[Shapefile] 성공적으로 로드됨 (Geometry Only): ${cachedFeatures?.length}개`);
-            } else {
-                console.warn("[Shapefile] 파싱 실패: 데이터가 없습니다.");
-                return [];
-            }
+        console.log(`[SGIS] 행정구역 경계 데이터 요청: ${zone.mainTrarNm}`);
+        const token = await getSgisToken();
+        
+        // 2. Get SGIS Administrative Code (adm_cd) using Geocoding
+        // zone.mainTrarNm (e.g., "서울 강남구 삼성동") -> Geocode -> SGIS Code (e.g., "1123068")
+        const geoUrl = `${SGIS_BASE_URL}/addr/geocode.json?accessToken=${token}&address=${encodeURIComponent(zone.mainTrarNm)}`;
+        
+        let geoRes = await fetch(`https://corsproxy.io/?${encodeURIComponent(geoUrl)}`);
+        if (!geoRes.ok) geoRes = await fetch(`https://api.allorigins.win/raw?url=${encodeURIComponent(geoUrl)}`);
+        
+        const geoData = await geoRes.json();
+        
+        let admCd = "";
+        if (geoData.errCd === 0 && geoData.result?.resultdata?.length > 0) {
+            admCd = geoData.result.resultdata[0].adm_cd;
+            console.log(`[SGIS] 행정동 코드 획득: ${admCd}`);
+        } else {
+            console.warn(`[SGIS] 주소 검색 실패: ${zone.mainTrarNm}`);
+            return [];
         }
+
+        // 3. Fetch Boundary using adm_cd
+        // Endpoint: /boundary/hadmarea.geojson (Administrative District Boundary)
+        // low_search=0 (Retrieve boundary for the specific adm_cd)
+        const boundUrl = `${SGIS_BASE_URL}/boundary/hadmarea.geojson?accessToken=${token}&adm_cd=${admCd}&low_search=0`;
         
-        if (!cachedFeatures) return [];
-
-        const nameParts = zone.mainTrarNm.split(" ");
-        const dongName = nameParts.length >= 1 ? nameParts[nameParts.length - 1] : "";
+        let boundRes = await fetch(`https://corsproxy.io/?${encodeURIComponent(boundUrl)}`);
+        if (!boundRes.ok) boundRes = await fetch(`https://api.allorigins.win/raw?url=${encodeURIComponent(boundUrl)}`);
         
-        const candidates = cachedFeatures.filter((f: any) => {
-            const props = f.properties || {};
-            const name = String(props.ADM_DR_NM || props.adm_dr_nm || props.ADM_NM || props.adm_nm || "").trim();
-            return name === dongName; 
-        });
+        const boundData = await boundRes.json();
 
-        let targetFeature = null;
-
-        if (candidates.length === 1) {
-            targetFeature = candidates[0];
-        } else if (candidates.length > 1) {
-            if (zone.searchLat && zone.searchLon) {
-                let minDist = Infinity;
-                for (const feature of candidates) {
-                    let coords = [];
-                    if (feature.geometry.type === "Polygon") coords = feature.geometry.coordinates[0];
-                    else if (feature.geometry.type === "MultiPolygon") coords = feature.geometry.coordinates[0][0];
-
-                    if (coords.length > 0) {
-                        let sumX = 0, sumY = 0, count = 0;
-                        for (const p of coords) {
-                            sumX += p[0];
-                            sumY += p[1];
-                            count++;
-                        }
-                        const avgX = sumX / count;
-                        const avgY = sumY / count;
-                        let [cLat, cLon] = [avgY, avgX];
-                        if (avgX > 180) { 
-                             [cLat, cLon] = projectPoint(avgX, avgY);
-                        }
-                        const dist = getDistSq(cLat, cLon, zone.searchLat, zone.searchLon);
-                        if (dist < minDist) {
-                            minDist = dist;
-                            targetFeature = feature;
-                        }
+        if (boundData.features && boundData.features.length > 0) {
+            const geometry = boundData.features[0].geometry;
+            let coords = [];
+            
+            // Handle Polygon or MultiPolygon
+            if (geometry.type === "Polygon") {
+                coords = geometry.coordinates;
+            } else if (geometry.type === "MultiPolygon") {
+                // For MultiPolygon, find the largest ring (usually the mainland)
+                let maxLen = 0;
+                geometry.coordinates.forEach((poly: any[]) => {
+                    if (poly[0].length > maxLen) {
+                        maxLen = poly[0].length;
+                        coords = poly;
                     }
-                }
-                // 재검색 최적화
-                targetFeature = candidates.find(f => {
-                     let coords = [];
-                     if (f.geometry.type === "Polygon") coords = f.geometry.coordinates[0];
-                     else if (f.geometry.type === "MultiPolygon") coords = f.geometry.coordinates[0][0];
-                     
-                     if(coords.length > 0) {
-                         let sumX = 0, sumY = 0, count = 0;
-                         for(const p of coords) { sumX += p[0]; sumY += p[1]; count++; }
-                         const avgX = sumX/count; const avgY = sumY/count;
-                         let [cLat, cLon] = [avgY, avgX];
-                         if(avgX > 180) [cLat, cLon] = projectPoint(avgX, avgY);
-                         return Math.abs(getDistSq(cLat, cLon, zone.searchLat!, zone.searchLon!) - minDist) < 0.000001;
-                     }
-                     return false;
                 });
-            } else {
-                targetFeature = candidates[0];
+            }
+
+            if (coords.length > 0) {
+                // 4. Transform Coordinates: UTM-K (5179) -> WGS84 (4326) -> Leaflet [lat, lon]
+                const ring = coords[0]; // Outer ring
+                const result = [ring.map((p: number[]) => {
+                    // SGIS returns [x, y] in UTM-K
+                    if (typeof proj4 !== 'undefined') {
+                        // proj4 returns [lon, lat] for WGS84
+                        const [lon, lat] = proj4(PROJ_5179, PROJ_WGS84, p);
+                        return [lat, lon]; // Leaflet expects [lat, lon]
+                    }
+                    return [p[1], p[0]]; // Fallback (incorrect if unprojected)
+                })];
+
+                // Cache the result
+                polygonCache.set(zone.mainTrarNm, result);
+                return result;
             }
         }
-
-        if (!targetFeature) return [];
-
-        let coords: any[] = [];
-        if (targetFeature.geometry.type === "Polygon") coords = targetFeature.geometry.coordinates;
-        else if (targetFeature.geometry.type === "MultiPolygon") coords = targetFeature.geometry.coordinates[0];
-
-        if (coords.length > 0) {
-            const testPoint = coords[0][0]; 
-            const x = testPoint[0];
-            const y = testPoint[1];
-            const needsProj = x > 180;
-
-            return coords.map((ring: number[][]) => 
-                ring.map((c: number[]) => {
-                    const [px, py] = c;
-                    if (needsProj) return projectPoint(px, py);
-                    return [c[1], c[0]];
-                })
-            );
-        }
-    } catch (e) {
-        console.warn("Shapefile 로딩 중 오류 발생:", e);
+    } catch (e: any) {
+        console.warn(`[SGIS] API Error: ${e.message}`);
     }
     return [];
 };
