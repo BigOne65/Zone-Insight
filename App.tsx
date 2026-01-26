@@ -2,8 +2,8 @@ import React, { useState, useEffect, useMemo } from 'react';
 import { PieChart, Pie, Cell, BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer, Sector } from 'recharts';
 import * as Icons from './components/Icons';
 import TradeMap from './components/Map';
-import GoogleAd from './components/GoogleAd'; // Import Ad Component
-import { searchAddress, searchZones, fetchStores, searchAdminDistrict, fetchStoresInAdmin } from './services/api';
+import GoogleAd from './components/GoogleAd';
+import { searchAddress, searchZones, fetchStores, searchAdminDistrict, fetchStoresInAdmin, fetchLocalAdminPolygon } from './services/api';
 import { Zone, Store, StoreStats } from './types';
 
 // Constants
@@ -67,7 +67,7 @@ const App: React.FC = () => {
   const [step, setStep] = useState<"input" | "verify_location" | "select_zone" | "result">("input");
   
   // Search Settings
-  const [searchType, setSearchType] = useState<'trade' | 'admin'>('trade'); // 'trade' = 주요상권, 'admin' = 행정구역
+  const [searchType, setSearchType] = useState<'trade' | 'admin'>('trade'); 
 
   const [searchCoords, setSearchCoords] = useState<{lat: number, lon: number}>({ lat: 37.5665, lon: 126.9780 });
   const [resolvedAddress, setResolvedAddress] = useState("");
@@ -90,7 +90,6 @@ const App: React.FC = () => {
   const [selectedBuildingIndex, setSelectedBuildingIndex] = useState<number | null>(null);
   const [detailedAnalysisFilter, setDetailedAnalysisFilter] = useState<string | null>(null);
 
-  // Handlers
   const handleGeocode = async () => {
     if (!address) { setError("주소를 입력해주세요."); return; }
     setLoading(true); setLoadingMsg("주소 위치를 확인하고 있습니다..."); setError(null);
@@ -125,14 +124,32 @@ const App: React.FC = () => {
       } else {
           setLoadingMsg("해당 주소의 행정구역(동) 정보를 조회하고 있습니다...");
           const addrParts = resolvedAddress.split(" ");
-          const zones = await searchAdminDistrict(addrParts[0] || "", addrParts[1] || "", addrParts.slice(2).join(" ") || "");
-          const enhancedZones = zones.map(z => ({
-              ...z,
-              searchLat: searchCoords.lat, // Use geocoded center as default map center
-              searchLon: searchCoords.lon,
-              parsedPolygon: [], // Admin zones don't have polygons from this API
-              type: 'admin' as const
+          
+          // Extract Dong from parentheses if present (e.g., "... (역삼동)")
+          const dongMatch = resolvedAddress.match(/\(([^)]+)\)$/);
+          const explicitDong = dongMatch ? dongMatch[1] : (addrParts.slice(2).join(" ") || "");
+          
+          const zones = await searchAdminDistrict(addrParts[0] || "", addrParts[1] || "", explicitDong);
+          
+          setLoadingMsg("행정구역 경계 데이터(Polygon)를 불러오는 중입니다...");
+          
+          // Fetch polygons for all found admin zones
+          const enhancedZones = await Promise.all(zones.map(async (z) => {
+              const baseZone = {
+                  ...z,
+                  searchLat: searchCoords.lat,
+                  searchLon: searchCoords.lon,
+                  type: 'admin' as const
+              };
+              try {
+                  const polygon = await fetchLocalAdminPolygon(baseZone);
+                  return { ...baseZone, parsedPolygon: polygon };
+              } catch (e) {
+                  console.warn(`Failed to load polygon for ${z.mainTrarNm}`, e);
+                  return { ...baseZone, parsedPolygon: [] };
+              }
           }));
+          
           setFoundZones(enhancedZones);
       }
       setStep('select_zone');
@@ -155,20 +172,16 @@ const App: React.FC = () => {
       let stores: Store[] = [];
       let stdrYm = "";
 
-      // Branch logic based on zone type
       if (selectedZone.type === 'admin' && selectedZone.adminCode && selectedZone.adminLevel) {
-          // 행정구역 기준 분석 (storeListInDong)
           const result = await fetchStoresInAdmin(selectedZone.adminCode, selectedZone.adminLevel, (msg) => setLoadingMsg(msg));
           stores = result.stores;
           stdrYm = result.stdrYm;
       } else {
-          // 주요상권 기준 분석 (storeListInArea)
           const result = await fetchStores(selectedZone.trarNo, (msg) => setLoadingMsg(msg));
           stores = result.stores;
           stdrYm = result.stdrYm;
       }
       
-      // Date Fallback Logic
       const rawDate = stdrYm || stores[0]?.stdrYm || selectedZone.stdrYm || "";
       const cleanDate = rawDate.replace(/[^0-9]/g, '');
       const fmtDate = cleanDate.length >= 6 ? `${cleanDate.substring(0,4)}년 ${cleanDate.substring(4,6)}월` : rawDate;
@@ -186,7 +199,6 @@ const App: React.FC = () => {
   const analyzeData = (stores: Store[], largeFilter?: string | null, midFilter?: string | null) => {
     if (!stores.length) return;
 
-    // 1. Summary
     const summaryGroups: Record<string, any> = {};
     stores.forEach(s => {
         const l = s.indsLclsNm || "기타";
@@ -209,12 +221,10 @@ const App: React.FC = () => {
         };
     }).sort((a,b) => b.count - a.count);
 
-    // 2. Filtering
     let filtered = stores;
     if(largeFilter) filtered = filtered.filter(s => s.indsLclsNm === largeFilter);
     if(midFilter) filtered = filtered.filter(s => s.indsMclsNm === midFilter);
 
-    // 3. Stats Generation
     const lCounts: Record<string, number> = {};
     const mCounts: Record<string, number> = {};
     const bCounts: Record<string, number> = {};
@@ -241,7 +251,6 @@ const App: React.FC = () => {
     const fullBarData = Object.keys(mCounts).map(k => ({ name: k, count: mCounts[k], value: mCounts[k] })).sort((a,b) => b.count - a.count);
     const buildingData = Object.keys(bCounts).map(k => ({ name: k, count: bCounts[k], value: bCounts[k], lat: bInfo[k]?.lat, lon: bInfo[k]?.lon })).sort((a,b) => b.count - a.count).slice(0, 5);
 
-    // Top Stores Logic
     const isMajor = (nm: string) => MAJOR_BRANDS.some(b => nm.includes(b));
     const isFranchiseStore = (s: Store) => (s.brchNm && s.brchNm.trim() !== "") || (s.bizesNm.includes("점") && !s.bizesNm.includes("상점"));
 
@@ -506,13 +515,13 @@ const App: React.FC = () => {
                         {previewZone?.trarNo === z.trarNo && (
                             <div className="mt-4 pt-4 border-t border-blue-200 animate-fade-in">
                                  {/* Admin mode might not have polygons */}
-                                 {(z.parsedPolygon || searchType === 'trade') ? (
+                                 {(z.parsedPolygon && z.parsedPolygon.length > 0) || searchType === 'trade' ? (
                                      <div className="h-64 w-full rounded-lg overflow-hidden border border-gray-300 mb-3 relative z-0">
                                         <TradeMap lat={z.searchLat!} lon={z.searchLon!} polygonCoords={z.parsedPolygon} tradeName={z.mainTrarNm}/>
                                      </div>
                                  ) : (
                                      <div className="bg-gray-50 border border-gray-200 rounded-lg p-4 mb-3 text-center text-gray-500 text-sm">
-                                         * 행정구역 분석은 상세 지도 영역 표시를 지원하지 않습니다.
+                                         * 해당 행정구역의 상세 경계 데이터를 불러오지 못했습니다. (데이터 없음)
                                      </div>
                                  )}
                                  <button onClick={(e) => { e.stopPropagation(); handleAnalyzeZone(z); }} className={`w-full text-white px-6 py-3 rounded-lg font-bold hover:opacity-90 transition flex items-center justify-center gap-2 ${searchType === 'trade' ? 'bg-blue-600' : 'bg-green-600'}`}>
