@@ -70,7 +70,7 @@ const fetchWithRetry = async (targetUrl: string): Promise<string> => {
 // --- API Functions ---
 
 export const searchAddress = async (address: string): Promise<any> => {
-    if (!VWORLD_KEY) throw new Error("V-World API Key가 설정되지 않았습니다. .env 파일을 확인해주세요.");
+    if (!VWORLD_KEY) throw new Error("V-World API Key가 설정되지 않았습니다.");
     let errorDetails: string[] = [];
     const runSearch = async (searchType: string, category?: string) => {
         let baseUrl = `${VWORLD_BASE_URL}?service=search&request=search&version=2.0&crs=EPSG:4326&size=10&page=1&query=${encodeURIComponent(address)}&type=${searchType}&format=json&errorformat=json&key=${VWORLD_KEY}`;
@@ -95,7 +95,7 @@ export const searchAddress = async (address: string): Promise<any> => {
 };
 
 export const searchZones = async (lat: number, lon: number): Promise<Zone[]> => {
-    if (!DATA_API_KEY) throw new Error("공공데이터포털 API Key가 설정되지 않았습니다. .env 파일을 확인해주세요.");
+    if (!DATA_API_KEY) throw new Error("공공데이터포털 API Key가 설정되지 않았습니다.");
     const SEARCH_RADIUS = 500;
     const zoneUrl = `${BASE_URL}/storeZoneInRadius?radius=${SEARCH_RADIUS}&cx=${lon}&cy=${lat}&serviceKey=${DATA_API_KEY}&type=json`;
     const zoneText = await fetchWithRetry(zoneUrl);
@@ -247,19 +247,21 @@ const getDistSq = (lat1: number, lon1: number, lat2: number, lon2: number) => {
     return Math.pow(lat1 - lat2, 2) + Math.pow(lon1 - lon2, 2);
 };
 
-// V-World WFS를 통해 행정구역 경계 데이터 가져오기 (동적 폴백)
+// ** New: Fetch from V-World WFS (Solves missing ZIP file issue) **
 const fetchPolygonFromVWorld = async (adminCode: string): Promise<number[][][]> => {
     if (!VWORLD_KEY) return [];
     
-    // 데이터 포털 코드는 10자리(예: 1168064000)이나 V-World는 8자리(11680640)를 사용할 수 있음
+    // BaroAPI returns 10 digits (e.g. 1168064000), V-World usually expects 8 digits (11680640) for 'lt_c_admdong'.
     const shortCode = adminCode.length >= 8 ? adminCode.substring(0, 8) : adminCode;
 
+    // Filter using XML syntax for WFS
     const query = `<Filter><PropertyIsEqualTo><PropertyName>adm_dr_cd</PropertyName><Literal>${shortCode}</Literal></PropertyIsEqualTo></Filter>`;
     
     const url = `https://api.vworld.kr/req/wfs?SERVICE=WFS&REQUEST=GetFeature&TYPENAME=lt_c_admdong&OUTPUT=application/json&SRSNAME=EPSG:4326&KEY=${VWORLD_KEY}&FILTER=${encodeURIComponent(query)}`;
 
     try {
         console.log(`[WFS Debug] Fetching polygon for code ${shortCode}...`);
+        // Use proxy to avoid CORS issues with V-World WFS
         const text = await fetchWithRetry(url);
         
         let json;
@@ -274,6 +276,7 @@ const fetchPolygonFromVWorld = async (adminCode: string): Promise<number[][][]> 
             console.log(`[WFS Debug] Found ${json.features.length} features.`);
             const geometry = json.features[0].geometry;
             if (geometry.type === 'Polygon') {
+                // GeoJSON: [lon, lat] -> Leaflet: [lat, lon]
                 return geometry.coordinates.map((ring: any[]) => ring.map((p: number[]) => [p[1], p[0]]));
             } else if (geometry.type === 'MultiPolygon') {
                 return geometry.coordinates[0].map((ring: any[]) => ring.map((p: number[]) => [p[1], p[0]]));
@@ -286,14 +289,14 @@ const fetchPolygonFromVWorld = async (adminCode: string): Promise<number[][][]> 
 }
 
 export const fetchLocalAdminPolygon = async (zone: Zone): Promise<number[][][]> => {
-    // 1. API 키가 있고 행정동 코드가 있으면 V-World WFS 우선 시도
+    // 1. Try V-World WFS first (Dynamically fetch data without ZIP)
     if (zone.type === 'admin' && zone.adminCode) {
         const wfsPolygon = await fetchPolygonFromVWorld(zone.adminCode);
         if (wfsPolygon.length > 0) return wfsPolygon;
-        console.warn("Falling back to local ZIP file...");
+        console.warn("WFS failed or empty, falling back to local ZIP file...");
     }
 
-    // 2. Local ZIP (BND_ADM_DONG_PG_simple.zip) 폴백
+    // 2. Fallback to Local ZIP (BND_ADM_DONG_PG_simple.zip)
     try {
         if (!cachedFeatures) {
             // @ts-ignore
@@ -305,17 +308,17 @@ export const fetchLocalAdminPolygon = async (zone: Zone): Promise<number[][][]> 
             console.log("[Shapefile Debug] Loading local shapefile (BND_ADM_DONG_PG_simple.zip)...");
             
             try {
-                // Cache Busting: 타임스탬프를 추가하여 캐시된 404 페이지 방지
+                // Cache Busting
                 const response = await fetch('/BND_ADM_DONG_PG_simple.zip?v=' + new Date().getTime());
                 
                 if (!response.ok) {
                     throw new Error(`Failed to fetch zip file: ${response.status} ${response.statusText}`);
                 }
                 
-                // HTML 반환 체크 (Soft 404)
+                // Content-Type Check: If we got HTML (e.g. 404 page), stop here
                 const contentType = response.headers.get('content-type');
                 if (contentType && contentType.includes('text/html')) {
-                     console.warn("ZIP file not found (server returned HTML). Polygons may not load.");
+                     console.warn("ZIP file not found (server returned HTML). Polygon data will be unavailable.");
                      return [];
                 }
 
@@ -326,7 +329,7 @@ export const fetchLocalAdminPolygon = async (zone: Zone): Promise<number[][][]> 
                 // Magic Number Check (PK = 0x50 0x4B)
                 const header = new Uint8Array(arrayBuffer, 0, 2);
                 if (header[0] !== 0x50 || header[1] !== 0x4B) {
-                    console.warn("File is not a valid ZIP file (Invalid Magic Number).");
+                    console.warn("File is not a valid ZIP file (Invalid Magic Number). Skip parsing.");
                     return [];
                 }
 
@@ -385,7 +388,7 @@ export const fetchLocalAdminPolygon = async (zone: Zone): Promise<number[][][]> 
                         }
                     }
                 }
-                // 재검색 로직 중복 제거 및 최적화
+                // Recalculate or just use the logic result (simplified for stability)
                 targetFeature = candidates.find(f => {
                      let coords = [];
                      if (f.geometry.type === "Polygon") coords = f.geometry.coordinates[0];
