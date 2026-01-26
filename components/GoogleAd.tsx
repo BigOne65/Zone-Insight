@@ -5,9 +5,9 @@ interface GoogleAdProps {
   style?: React.CSSProperties;
   client?: string; // ca-pub-XXXX...
   slot: string;    // Ad Unit ID generated from AdSense Console
-  format?: 'auto' | 'fluid' | 'rectangle';
+  format?: 'auto' | 'fluid' | 'rectangle' | 'horizontal' | 'vertical';
   responsive?: string;
-  layout?: 'display' | 'in-article';
+  layout?: string;
 }
 
 declare global {
@@ -21,9 +21,9 @@ const GoogleAd: React.FC<GoogleAdProps> = ({
   style = { display: 'block' },
   client = "ca-pub-4276127967714914", // Your Publisher ID
   slot,
-  format = "auto",
+  format = "horizontal", // Default set to 'horizontal' per user request
   responsive = "true",
-  layout = 'display'
+  layout
 }) => {
   const adRef = useRef<HTMLModElement>(null);
 
@@ -38,10 +38,9 @@ const GoogleAd: React.FC<GoogleAdProps> = ({
     }
   }, []);
 
-  // 개발 환경(Localhost)에서는 광고가 보이지 않을 수 있으므로 자리만 잡아주는 스타일 추가 가능
   return (
-    <div className={`google-ad-container my-8 w-full flex justify-center bg-gray-50 ${className}`}>
-        {/* 광고 라벨 (선택 사항) */}
+    <div className={`google-ad-container my-8 w-full flex justify-center bg-gray-50 rounded-lg overflow-hidden ${className}`}>
+        {/* 광고 라벨 */}
         <div className="w-full text-center">
             <div className="text-[10px] text-gray-400 mb-1 uppercase tracking-wider">Advertisement</div>
             <ins
@@ -52,6 +51,7 @@ const GoogleAd: React.FC<GoogleAdProps> = ({
                 data-ad-slot={slot}
                 data-ad-format={format}
                 data-full-width-responsive={responsive}
+                {...(layout ? { 'data-ad-layout': layout } : {})}
             />
         </div>
     </div>
