@@ -740,7 +740,13 @@ const App: React.FC = () => {
                     <div className="overflow-x-auto max-h-96 custom-scrollbar">
                        <table className="w-full text-left text-sm text-gray-600">
                           <thead className="bg-gray-100 text-gray-700 uppercase font-semibold sticky top-0">
-                             <tr><th className="px-2 py-2 md:px-6 md:py-3">순위</th><th className="px-2 py-2 md:px-6 md:py-3">상호명</th><th className="px-2 py-2 md:px-6 md:py-3">대분류</th><th className="px-2 py-2 md:px-6 md:py-3">중분류</th><th className="px-2 py-2 md:px-6 md:py-3">주소</th></tr>
+                             <tr>
+                                <th className="px-2 py-2 md:px-6 md:py-3 whitespace-nowrap">번호</th>
+                                <th className="px-2 py-2 md:px-6 md:py-3 min-w-[200px]">상호명</th>
+                                <th className="px-2 py-2 md:px-6 md:py-3 whitespace-nowrap min-w-[60px]">대분류</th>
+                                <th className="px-2 py-2 md:px-6 md:py-3 whitespace-nowrap min-w-[80px]">중분류</th>
+                                <th className="px-2 py-2 md:px-6 md:py-3 min-w-[150px]">주소</th>
+                             </tr>
                           </thead>
                           <tbody className="divide-y">
                              {topStores.map((s,i) => {
