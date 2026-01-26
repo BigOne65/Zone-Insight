@@ -187,7 +187,6 @@ export const searchAdminDistrict = async (sido: string, sigungu: string, dong: s
             let filteredDongs = dongs;
             
             if (dong) {
-                // Remove '동' and numeric suffixes for fuzzy matching (e.g. 역삼 -> 역삼1동, 역삼2동)
                 const cleanDong = dong.replace(/[0-9.]+|동$/g, "").trim();
                 const matches = dongs.filter((d: any) => {
                      const cleanAdong = d.adongNm.replace(/[0-9.]+|동$/g, "").trim();
@@ -223,6 +222,8 @@ export const searchAdminDistrict = async (sido: string, sigungu: string, dong: s
     return adminZones;
 };
 
+// --- Shapefile / WFS Helpers ---
+
 let cachedFeatures: any[] | null = null;
 
 const projectPoint = (x: number, y: number): [number, number] => {
@@ -240,7 +241,59 @@ const getDistSq = (lat1: number, lon1: number, lat2: number, lon2: number) => {
     return Math.pow(lat1 - lat2, 2) + Math.pow(lon1 - lon2, 2);
 };
 
+// ** New: Fetch from V-World WFS **
+const fetchPolygonFromVWorld = async (adminCode: string): Promise<number[][][]> => {
+    if (!VWORLD_KEY) return [];
+    
+    // Admin Code from Data.go.kr is usually 10 digits (e.g., 1168064000).
+    // V-World lt_c_admdong uses 8 digits (e.g., 11680640).
+    const shortCode = adminCode.length >= 8 ? adminCode.substring(0, 8) : adminCode;
+
+    // Filter using XML syntax for WFS
+    const query = `<Filter><PropertyIsEqualTo><PropertyName>adm_dr_cd</PropertyName><Literal>${shortCode}</Literal></PropertyIsEqualTo></Filter>`;
+    
+    const url = `https://api.vworld.kr/req/wfs?SERVICE=WFS&REQUEST=GetFeature&TYPENAME=lt_c_admdong&OUTPUT=application/json&SRSNAME=EPSG:4326&KEY=${VWORLD_KEY}&FILTER=${encodeURIComponent(query)}`;
+
+    try {
+        console.log(`[WFS Debug] Fetching polygon for code ${shortCode}...`);
+        // Use proxy to avoid CORS issues with V-World WFS
+        const text = await fetchWithRetry(url);
+        
+        let json;
+        try {
+             json = JSON.parse(text);
+        } catch (e) {
+             console.warn("[WFS Debug] Failed to parse JSON", text.substring(0, 100));
+             return [];
+        }
+        
+        if (json.features && json.features.length > 0) {
+            console.log(`[WFS Debug] Found ${json.features.length} features.`);
+            const geometry = json.features[0].geometry;
+            if (geometry.type === 'Polygon') {
+                // GeoJSON: [lon, lat] -> Leaflet: [lat, lon]
+                return geometry.coordinates.map((ring: any[]) => ring.map((p: number[]) => [p[1], p[0]]));
+            } else if (geometry.type === 'MultiPolygon') {
+                return geometry.coordinates[0].map((ring: any[]) => ring.map((p: number[]) => [p[1], p[0]]));
+            }
+        } else {
+             console.log("[WFS Debug] No features found for this code.");
+        }
+    } catch (e) {
+        console.warn("V-World WFS failed:", e);
+    }
+    return [];
+}
+
 export const fetchLocalAdminPolygon = async (zone: Zone): Promise<number[][][]> => {
+    // 1. If it's an Admin Zone with a code, try V-World WFS first
+    if (zone.type === 'admin' && zone.adminCode) {
+        const wfsPolygon = await fetchPolygonFromVWorld(zone.adminCode);
+        if (wfsPolygon.length > 0) return wfsPolygon;
+        console.warn("Falling back to local ZIP file...");
+    }
+
+    // 2. Fallback to Local ZIP (BND_ADM_DONG_PG_simple.zip)
     try {
         if (!cachedFeatures) {
             // @ts-ignore
@@ -252,24 +305,22 @@ export const fetchLocalAdminPolygon = async (zone: Zone): Promise<number[][][]> 
             console.log("[Shapefile Debug] Loading local shapefile (BND_ADM_DONG_PG_simple.zip)...");
             
             try {
-                // Direct fetch to validate file existence and type before parsing
                 const response = await fetch('/BND_ADM_DONG_PG_simple.zip');
                 
                 if (!response.ok) {
                     throw new Error(`Failed to fetch zip file: ${response.status} ${response.statusText}`);
                 }
                 
-                // Check if we got HTML back (common in SPAs for 404s)
                 const contentType = response.headers.get('content-type');
                 if (contentType && contentType.includes('text/html')) {
-                    throw new Error("File not found: The server returned HTML instead of a ZIP file. Please ensure 'BND_ADM_DONG_PG_simple.zip' is in the public folder.");
+                     // Treat as soft 404
+                     console.warn("ZIP file not found (server returned HTML). Polygons may not load.");
+                     return [];
                 }
 
                 const arrayBuffer = await response.arrayBuffer();
                 
-                if (arrayBuffer.byteLength === 0) {
-                     throw new Error("File is empty.");
-                }
+                if (arrayBuffer.byteLength === 0) throw new Error("File is empty.");
 
                 // @ts-ignore
                 const geojson = await window.shp(arrayBuffer);
@@ -277,10 +328,8 @@ export const fetchLocalAdminPolygon = async (zone: Zone): Promise<number[][][]> 
                 if (Array.isArray(geojson)) cachedFeatures = geojson.flatMap(g => g.features);
                 else cachedFeatures = geojson.features;
                 
-                console.log(`[Shapefile Debug] Loaded. Total features: ${cachedFeatures?.length}`);
-
             } catch (err) {
-                console.error("[Shapefile Debug] ❌ Error loading/parsing ZIP file:", err);
+                console.error("[Shapefile Debug] Error loading ZIP:", err);
                 return [];
             }
         }
@@ -327,6 +376,33 @@ export const fetchLocalAdminPolygon = async (zone: Zone): Promise<number[][][]> 
                             targetFeature = feature;
                         }
                     }
+                }
+                targetFeature = candidates.find(f => {
+                     // Basic check if we picked the right one logic can be here, 
+                     // but loop above finds closest centroid.
+                     // Re-find based on logic or assign directly in loop.
+                     // Let's just use the one from loop logic if I stored it.
+                     return false; 
+                });
+                // Reset for clean implementation
+                minDist = Infinity;
+                targetFeature = null;
+                
+                for (const feature of candidates) {
+                     let coords = [];
+                     if (feature.geometry.type === "Polygon") coords = feature.geometry.coordinates[0];
+                     else if (feature.geometry.type === "MultiPolygon") coords = feature.geometry.coordinates[0][0];
+                     
+                     if(coords.length > 0) {
+                         let sumX = 0, sumY = 0, count = 0;
+                         for(const p of coords) { sumX += p[0]; sumY += p[1]; count++; }
+                         const avgX = sumX/count; const avgY = sumY/count;
+                         let [cLat, cLon] = [avgY, avgX];
+                         if(avgX > 180) [cLat, cLon] = projectPoint(avgX, avgY);
+                         
+                         const dist = getDistSq(cLat, cLon, zone.searchLat, zone.searchLon);
+                         if(dist < minDist) { minDist = dist; targetFeature = feature; }
+                     }
                 }
             } else {
                 targetFeature = candidates[0];
