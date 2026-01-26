@@ -3,7 +3,7 @@ import { PieChart, Pie, Cell, BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveCo
 import * as Icons from './components/Icons';
 import TradeMap from './components/Map';
 import GoogleAd from './components/GoogleAd'; // Import Ad Component
-import { searchAddress, searchZones, fetchStores, searchAdminDistrict, fetchStoresInAdmin } from './services/api';
+import { searchAddress, searchZones, fetchStores, searchAdminDistrict, fetchStoresInAdmin, fetchAdminPolygon } from './services/api';
 import { Zone, Store, StoreStats } from './types';
 
 // Constants
@@ -141,6 +141,26 @@ const App: React.FC = () => {
       setLoading(false);
     }
   };
+
+  // 행정동 선택 시 경계 데이터(Polygon) 로드
+  useEffect(() => {
+    const loadAdminPolygon = async () => {
+        if (previewZone && previewZone.type === 'admin' && previewZone.adminCode && (!previewZone.parsedPolygon || previewZone.parsedPolygon.length === 0)) {
+            try {
+                // Polygon 로딩 중임을 알리거나 조용히 로드
+                const poly = await fetchAdminPolygon(previewZone.adminCode);
+                if (poly && poly.length > 0) {
+                    setPreviewZone(prev => prev ? { ...prev, parsedPolygon: poly } : null);
+                    // Update foundZones as well to cache it
+                    setFoundZones(prev => prev.map(z => z.trarNo === previewZone.trarNo ? { ...z, parsedPolygon: poly } : z));
+                }
+            } catch (e) {
+                console.error("Polygon fetch failed", e);
+            }
+        }
+    };
+    loadAdminPolygon();
+  }, [previewZone]);
 
   const handleAnalyzeZone = async (selectedZone: Zone) => {
     setLoading(true); setLoadingMsg("상권 상세 데이터를 분석하고 있습니다..."); setError(null);
@@ -504,14 +524,15 @@ const App: React.FC = () => {
                         </div>
                         {previewZone?.trarNo === z.trarNo && (
                             <div className="mt-4 pt-4 border-t border-blue-200 animate-fade-in">
-                                 {/* Admin mode might not have polygons */}
+                                 {/* Admin mode might not have polygons initially, but fetched on expand */}
                                  {(z.parsedPolygon || searchType === 'trade') ? (
                                      <div className="h-64 w-full rounded-lg overflow-hidden border border-gray-300 mb-3 relative z-0">
                                         <TradeMap lat={z.searchLat!} lon={z.searchLon!} polygonCoords={z.parsedPolygon} tradeName={z.mainTrarNm}/>
                                      </div>
                                  ) : (
-                                     <div className="bg-gray-50 border border-gray-200 rounded-lg p-4 mb-3 text-center text-gray-500 text-sm">
-                                         * 행정구역 분석은 상세 지도 영역 표시를 지원하지 않습니다.
+                                     <div className="bg-gray-50 border border-gray-200 rounded-lg p-4 mb-3 text-center text-gray-500 text-sm flex flex-col items-center justify-center gap-2 min-h-[150px]">
+                                         <div className="loading-spinner mb-2" />
+                                         <span>행정 구역 경계 데이터를 불러오는 중입니다...</span>
                                      </div>
                                  )}
                                  <button onClick={(e) => { e.stopPropagation(); handleAnalyzeZone(z); }} className={`w-full text-white px-6 py-3 rounded-lg font-bold hover:opacity-90 transition flex items-center justify-center gap-2 ${searchType === 'trade' ? 'bg-blue-600' : 'bg-green-600'}`}>

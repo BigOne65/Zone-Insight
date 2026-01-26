@@ -28,6 +28,7 @@ const VWORLD_KEY = getEnvVar("VITE_VWORLD_KEY");
 
 const BASE_URL = "http://apis.data.go.kr/B553077/api/open/sdsc2";
 const VWORLD_BASE_URL = "https://api.vworld.kr/req/search";
+const VWORLD_DATA_URL = "https://api.vworld.kr/req/data";
 
 // Helper: JSONP for V-World
 const fetchJsonp = (url: string, callbackParam = 'callback'): Promise<any> => {
@@ -247,16 +248,12 @@ export const searchAdminDistrict = async (addressStr: string): Promise<Zone[]> =
             const dongs = await fetchBaroApi('dong', 'admi', `&signguCd=${targetSigungu.signguCd}`);
             
             // 5. Intelligent Filtering
-            // If dongName is provided, try to filter.
-            // Crucial Fix: If filtering results in 0 items (e.g. because input was a road name like 'Teheran-ro'),
-            // fallback to showing ALL dongs in the Sigungu so user can pick one.
             let filteredDongs = dongs;
             if (dongName) {
                 const matches = dongs.filter((d: any) => d.adongNm.includes(dongName));
                 if (matches.length > 0) {
                     filteredDongs = matches;
                 }
-                // If matches.length === 0, we intentionally keep filteredDongs as ALL dongs.
             }
 
             // Map to Zone interface
@@ -266,7 +263,7 @@ export const searchAdminDistrict = async (addressStr: string): Promise<Zone[]> =
                 ctprvnNm: targetSido.ctprvnNm,
                 signguNm: targetSigungu.signguNm,
                 trarArea: "0",
-                coords: "", // No polygon for admin district
+                coords: "", // No polygon initially
                 type: 'admin',
                 adminCode: d.adongCd,
                 adminLevel: 'adongCd'
@@ -278,6 +275,42 @@ export const searchAdminDistrict = async (addressStr: string): Promise<Zone[]> =
 
     if (adminZones.length === 0) throw new Error("해당 조건에 맞는 행정동을 찾을 수 없습니다.");
     return adminZones;
+};
+
+// V-World Data API to fetch Polygon for Admin District
+export const fetchAdminPolygon = async (adminCode: string): Promise<number[][][]> => {
+    if (!VWORLD_KEY) return [];
+
+    // V-World LT_C_ADEMD_INFO (Admin Dong) usually uses 8 digit code (Sido 2 + Sigungu 3 + EMD 3)
+    // adminCode from BaroAPI is usually 10 digits.
+    const searchCode = adminCode.length >= 8 ? adminCode.substring(0, 8) : adminCode;
+    
+    const url = `${VWORLD_DATA_URL}?service=data&request=GetFeature&data=LT_C_ADEMD_INFO&key=${VWORLD_KEY}&domain=localhost&attrFilter=emd_cd:like:${searchCode}&format=json&geometry=true&size=1`;
+    
+    try {
+        const text = await fetchWithRetry(url);
+        const json = JSON.parse(text);
+        
+        if (json.response && json.response.status === "OK" && json.response.result?.featureCollection?.features?.length > 0) {
+            const feature = json.response.result.featureCollection.features[0];
+            const geometry = feature.geometry;
+            
+            if (geometry.type === "Polygon") {
+                // GeoJSON is [lon, lat], we need [lat, lon]
+                return geometry.coordinates.map((ring: number[][]) => 
+                    ring.map((coord: number[]) => [coord[1], coord[0]])
+                );
+            } else if (geometry.type === "MultiPolygon") {
+                // Return first polygon ring for simplicity or merge (using first outer ring of first polygon)
+                return geometry.coordinates[0].map((ring: number[][]) => 
+                    ring.map((coord: number[]) => [coord[1], coord[0]])
+                );
+            }
+        }
+    } catch (e) {
+        console.warn("Failed to fetch admin polygon", e);
+    }
+    return [];
 };
 
 // Op #8 storeListInDong
