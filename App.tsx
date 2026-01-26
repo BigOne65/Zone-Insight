@@ -362,86 +362,81 @@ const App: React.FC = () => {
            {error && <p className="text-red-500 text-sm mt-2">{error}</p>}
         </div>
 
-        {/* Content for AdSense Approval (Valuable Inventory) */}
-        <div className="max-w-5xl mx-auto mt-8 md:mt-12 px-2 md:px-4 animate-fade-in">
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-6 md:gap-10">
-                <div className="space-y-6">
-                    <section>
-                        <h3 className="text-xl font-bold text-gray-800 mb-3 flex items-center gap-2">
-                            <span className="bg-blue-100 text-blue-600 p-1.5 rounded-lg"><Icons.MapPin className="w-5 h-5"/></span>
-                            상권 분석 서비스란?
-                        </h3>
-                        <p className="text-gray-600 leading-relaxed text-sm md:text-base">
-                            공개된 상권 데이터를 기반으로, 
-                            특정 지역(주소) 주변의 <strong>점포 현황, 업종 분포, 프랜차이즈 비율</strong> 등을 
-                            분석하여 제공하는 무료 웹 서비스입니다. 
-                            창업을 준비하거나 상권 현황이 궁금한 분들에게 객관적인 데이터를 시각화하여 보여드립니다.
-                        </p>
-                    </section>
-                    
-                    <section>
-                        <h3 className="text-xl font-bold text-gray-800 mb-3 flex items-center gap-2">
-                            <span className="bg-green-100 text-green-600 p-1.5 rounded-lg"><Icons.List className="w-5 h-5"/></span>
-                            이용 방법
-                        </h3>
-                        <ul className="space-y-3 text-gray-600 text-sm md:text-base">
-                            <li className="flex gap-3">
-                                <span className="flex-shrink-0 w-6 h-6 bg-gray-200 rounded-full flex items-center justify-center font-bold text-xs text-gray-700">1</span>
-                                <span>분석하고 싶은 지역의 도로명 주소나 지번 주소를 입력창에 입력하고 검색 버튼을 누릅니다.</span>
-                            </li>
-                            <li className="flex gap-3">
-                                <span className="flex-shrink-0 w-6 h-6 bg-gray-200 rounded-full flex items-center justify-center font-bold text-xs text-gray-700">2</span>
-                                <span>지도에서 검색된 위치가 맞는지 확인하고, '상권 분석하기' 버튼을 클릭하여 주변 상권 목록을 조회합니다.</span>
-                            </li>
-                            <li className="flex gap-3">
-                                <span className="flex-shrink-0 w-6 h-6 bg-gray-200 rounded-full flex items-center justify-center font-bold text-xs text-gray-700">3</span>
-                                <span>원하는 상권 구역을 선택하면, 해당 구역 내의 모든 점포 데이터를 분석한 리포트를 확인할 수 있습니다.</span>
-                            </li>
-                        </ul>
-                    </section>
-                </div>
-
-                <div className="space-y-6">
-                    <section>
-                         <h3 className="text-xl font-bold text-gray-800 mb-3 flex items-center gap-2">
-                            <span className="bg-orange-100 text-orange-600 p-1.5 rounded-lg"><Icons.TrendingUp className="w-5 h-5"/></span>
-                            제공하는 주요 데이터
-                        </h3>
-                        <div className="bg-white border border-gray-200 rounded-xl p-4 shadow-sm">
-                            <ul className="grid grid-cols-1 gap-3 text-sm text-gray-700">
-                                <li className="flex items-start gap-2">
-                                    <Icons.PieChartIcon className="w-4 h-4 text-blue-500 mt-0.5"/>
-                                    <span><strong>업종별 구성비:</strong> 대분류(음식, 소매 등) 및 중분류별 점포 수와 비율 차트</span>
-                                </li>
-                                <li className="flex items-start gap-2">
-                                    <Icons.Store className="w-4 h-4 text-green-500 mt-0.5"/>
-                                    <span><strong>프랜차이즈 분석:</strong> 전체 점포 중 프랜차이즈 가맹점 비율 추정치</span>
-                                </li>
-                                <li className="flex items-start gap-2">
-                                    <Icons.Layers className="w-4 h-4 text-orange-500 mt-0.5"/>
-                                    <span><strong>1층 점포 비율:</strong> 유동인구 접근성이 좋은 1층 점포의 비중 분석</span>
-                                </li>
-                                <li className="flex items-start gap-2">
-                                    <Icons.Building className="w-4 h-4 text-indigo-500 mt-0.5"/>
-                                    <span><strong>상가 밀집 건물:</strong> 해당 상권 내 점포가 가장 많이 입점한 주요 건물 Top 5</span>
-                                </li>
-                            </ul>
-                        </div>
-                    </section>
-
-                    <section className="bg-gray-50 p-4 rounded-xl border border-gray-100">
-                        <p className="text-xs text-gray-500 leading-relaxed">
-                            * 본 서비스는 API로 데이터를 호출하여 보여줍니다. <br/>
-                            * 데이터 갱신 시점에 따라 실제 현황과 일부 차이가 있을 수 있습니다.<br/>
-                            * 주소 검색은 국토교통부 V-World API를 활용합니다.
-                        </p>
-                    </section>
-                </div>
-            </div>
+        {/* AD Placement: Below Search Bar */}
+        <div className="max-w-2xl mx-auto mt-6 animate-fade-in">
+           <GoogleAd slot="2761269289" />
         </div>
 
-        <div className="max-w-2xl mx-auto mt-12 mb-8 animate-fade-in">
-           <GoogleAd slot="2761269289" />
+        {/* Content for AdSense Approval (Valuable Inventory) - Vertical Layout */}
+        <div className="max-w-3xl mx-auto mt-8 md:mt-12 px-4 animate-fade-in space-y-8">
+            <section className="bg-white p-6 rounded-xl border border-gray-100 shadow-sm">
+                <h3 className="text-xl font-bold text-gray-800 mb-3 flex items-center gap-2">
+                    <span className="bg-blue-100 text-blue-600 p-1.5 rounded-lg"><Icons.MapPin className="w-5 h-5"/></span>
+                    상권 분석 서비스란?
+                </h3>
+                <p className="text-gray-600 leading-relaxed">
+                    공개된 상권 데이터를 기반으로, 
+                    특정 지역(주소) 주변의 <strong>점포 현황, 업종 분포, 프랜차이즈 비율</strong> 등을 
+                    분석하여 제공하는 무료 웹 서비스입니다. 
+                    창업을 준비하거나 상권 현황이 궁금한 분들에게 객관적인 데이터를 시각화하여 보여드립니다.
+                </p>
+            </section>
+            
+            <section className="bg-white p-6 rounded-xl border border-gray-100 shadow-sm">
+                <h3 className="text-xl font-bold text-gray-800 mb-3 flex items-center gap-2">
+                    <span className="bg-green-100 text-green-600 p-1.5 rounded-lg"><Icons.List className="w-5 h-5"/></span>
+                    이용 방법
+                </h3>
+                <ul className="space-y-3 text-gray-600">
+                    <li className="flex gap-3">
+                        <span className="flex-shrink-0 w-6 h-6 bg-gray-200 rounded-full flex items-center justify-center font-bold text-xs text-gray-700">1</span>
+                        <span>분석하고 싶은 지역의 도로명 주소나 지번 주소를 입력창에 입력하고 검색 버튼을 누릅니다.</span>
+                    </li>
+                    <li className="flex gap-3">
+                        <span className="flex-shrink-0 w-6 h-6 bg-gray-200 rounded-full flex items-center justify-center font-bold text-xs text-gray-700">2</span>
+                        <span>지도에서 검색된 위치가 맞는지 확인하고, '상권 분석하기' 버튼을 클릭하여 주변 상권 목록을 조회합니다.</span>
+                    </li>
+                    <li className="flex gap-3">
+                        <span className="flex-shrink-0 w-6 h-6 bg-gray-200 rounded-full flex items-center justify-center font-bold text-xs text-gray-700">3</span>
+                        <span>원하는 상권 구역을 선택하면, 해당 구역 내의 모든 점포 데이터를 분석한 리포트를 확인할 수 있습니다.</span>
+                    </li>
+                </ul>
+            </section>
+
+            <section className="bg-white p-6 rounded-xl border border-gray-100 shadow-sm">
+                 <h3 className="text-xl font-bold text-gray-800 mb-3 flex items-center gap-2">
+                    <span className="bg-orange-100 text-orange-600 p-1.5 rounded-lg"><Icons.TrendingUp className="w-5 h-5"/></span>
+                    제공하는 주요 데이터
+                </h3>
+                <div className="bg-gray-50 border border-gray-200 rounded-xl p-4">
+                    <ul className="grid grid-cols-1 md:grid-cols-2 gap-4 text-sm text-gray-700">
+                        <li className="flex items-start gap-2">
+                            <Icons.PieChartIcon className="w-4 h-4 text-blue-500 mt-0.5"/>
+                            <span><strong>업종별 구성비:</strong> 대분류(음식, 소매 등) 및 중분류별 점포 수와 비율 차트</span>
+                        </li>
+                        <li className="flex items-start gap-2">
+                            <Icons.Store className="w-4 h-4 text-green-500 mt-0.5"/>
+                            <span><strong>프랜차이즈 분석:</strong> 전체 점포 중 프랜차이즈 가맹점 비율 추정치</span>
+                        </li>
+                        <li className="flex items-start gap-2">
+                            <Icons.Layers className="w-4 h-4 text-orange-500 mt-0.5"/>
+                            <span><strong>1층 점포 비율:</strong> 유동인구 접근성이 좋은 1층 점포의 비중 분석</span>
+                        </li>
+                        <li className="flex items-start gap-2">
+                            <Icons.Building className="w-4 h-4 text-indigo-500 mt-0.5"/>
+                            <span><strong>상가 밀집 건물:</strong> 해당 상권 내 점포가 가장 많이 입점한 주요 건물 Top 5</span>
+                        </li>
+                    </ul>
+                </div>
+            </section>
+
+            <section className="bg-gray-50 p-4 rounded-xl border border-gray-100">
+                <p className="text-xs text-gray-500 leading-relaxed text-center">
+                    * 본 서비스는 API로 데이터를 호출하여 보여줍니다. <br/>
+                    * 데이터 갱신 시점에 따라 실제 현황과 일부 차이가 있을 수 있습니다.<br/>
+                    * 주소 검색은 국토교통부 V-World API를 활용합니다.
+                </p>
+            </section>
         </div>
         </>
       )}
