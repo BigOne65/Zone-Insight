@@ -172,7 +172,8 @@ export const searchZones = async (lat: number, lon: number): Promise<Zone[]> => 
 
 export const fetchStores = async (zoneNo: string, onProgress: (msg: string) => void): Promise<{ stores: Store[], stdrYm: string }> => {
     if (!DATA_API_KEY) throw new Error("API Key Missing");
-    const PAGE_SIZE = 500;
+    // Increased PAGE_SIZE to reduce requests (Max 1000)
+    const PAGE_SIZE = 1000;
     let allStores: Store[] = [];
     let totalCount = 0;
     let stdrYm = "";
@@ -190,7 +191,9 @@ export const fetchStores = async (zoneNo: string, onProgress: (msg: string) => v
     } catch (e) {}
 
     const totalPages = Math.ceil(totalCount / PAGE_SIZE);
-    const loopLimit = Math.min(totalPages, 10);
+    // Increased loop limit to cover very large areas (up to 100k items)
+    const loopLimit = Math.min(totalPages, 100);
+    
     if (loopLimit > 1) {
         for (let i = 2; i <= loopLimit; i++) {
             const nextUrl = `${BASE_URL}/storeListInArea?key=${zoneNo}&numOfRows=${PAGE_SIZE}&pageNo=${i}&serviceKey=${DATA_API_KEY}&type=json`;
@@ -358,7 +361,8 @@ export const fetchLocalAdminPolygon = async (zone: Zone): Promise<number[][][]> 
 
 export const fetchStoresInAdmin = async (adminCode: string, divId: string, onProgress: (msg: string) => void): Promise<{ stores: Store[], stdrYm: string }> => {
     if (!DATA_API_KEY) throw new Error("API Key Missing");
-    const PAGE_SIZE = 500;
+    // Increased PAGE_SIZE to reduce requests (Max 1000)
+    const PAGE_SIZE = 1000;
     let allStores: Store[] = [];
     let totalCount = 0;
     let stdrYm = "";
@@ -376,7 +380,9 @@ export const fetchStoresInAdmin = async (adminCode: string, divId: string, onPro
     } catch (e) {}
 
     const totalPages = Math.ceil(totalCount / PAGE_SIZE);
-    const loopLimit = Math.min(totalPages, 5);
+    // Increased loop limit to cover very large areas (up to 100k items)
+    const loopLimit = Math.min(totalPages, 100);
+
     if (loopLimit > 1) {
         for (let i = 2; i <= loopLimit; i++) {
             const nextUrl = `${BASE_URL}/storeListInDong?divId=${divId}&key=${adminCode}&numOfRows=${PAGE_SIZE}&pageNo=${i}&serviceKey=${DATA_API_KEY}&type=json`;
