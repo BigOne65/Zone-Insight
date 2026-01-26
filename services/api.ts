@@ -26,12 +26,45 @@ const VWORLD_KEY = getEnvVar("VITE_VWORLD_KEY");
 const SGIS_ID = getEnvVar("VITE_SGIS_SERVICE_ID");
 const SGIS_SECRET = getEnvVar("VITE_SGIS_SECRET_KEY");
 
+// API Endpoints
 const BASE_URL = "https://apis.data.go.kr/B553077/api/open/sdsc2";
 const VWORLD_BASE_URL = "https://api.vworld.kr/req/search";
 const SGIS_BASE_URL = "https://sgisapi.kostat.go.kr/OpenAPI3";
 
 // --- Cache ---
 const polygonCache = new Map<string, number[][][]>();
+
+// --- Helpers ---
+
+/**
+ * API Key 포맷팅
+ * 공공데이터포털 키가 Decoding된 상태(+, / 포함)라면 반드시 인코딩해야 함.
+ * 이미 Encoding된 상태(% 포함)라면 그대로 사용.
+ */
+const getFormattedKey = (key: string) => {
+    if (!key) return "";
+    return key.includes('%') ? key : encodeURIComponent(key);
+};
+
+/**
+ * XML 에러 파싱
+ * 공공데이터포털은 에러 발생 시 status 200 OK와 함께 XML 에러 메시지를 반환하는 경우가 많음.
+ */
+const parseXmlError = (text: string) => {
+    try {
+        const parser = new DOMParser();
+        const xml = parser.parseFromString(text, "text/xml");
+        const authMsg = xml.getElementsByTagName("returnAuthMsg")[0]?.textContent;
+        const errMsg = xml.getElementsByTagName("errMsg")[0]?.textContent;
+        const returnReasonCode = xml.getElementsByTagName("returnReasonCode")[0]?.textContent;
+        
+        if (authMsg) return `API 인증 오류: ${authMsg} (코드: ${returnReasonCode})`;
+        if (errMsg) return `API 오류: ${errMsg}`;
+        return "API에서 알 수 없는 오류(XML)가 반환되었습니다.";
+    } catch (e) {
+        return "API 응답을 처리하는 중 오류가 발생했습니다.";
+    }
+};
 
 // --- Network Helpers ---
 
@@ -62,16 +95,20 @@ const fetchWithRetry = async (targetUrl: string): Promise<string> => {
         (url: string) => `https://corsproxy.io/?${encodeURIComponent(url)}`,
         (url: string) => `https://api.allorigins.win/raw?url=${encodeURIComponent(url)}`
     ];
+    
+    let lastError;
     for (let i = 0; i < proxies.length; i++) {
         try {
             const response = await fetch(proxies[i](targetUrl));
             if (!response.ok) throw new Error(`HTTP status ${response.status}`);
             return await response.text(); 
         } catch (e) {
-            if (i === proxies.length - 1) throw e; 
+            console.warn(`Proxy ${i+1} failed:`, e);
+            lastError = e;
+            if (i === proxies.length - 1) throw lastError; 
         }
     }
-    throw new Error("All proxies failed");
+    throw new Error("모든 프록시 서버 연결 실패");
 };
 
 // --- SGIS Helpers ---
@@ -91,19 +128,16 @@ const getSgisToken = async (): Promise<string> => {
 
     const url = `${SGIS_BASE_URL}/auth/authentication.json?consumer_key=${SGIS_ID}&consumer_secret=${SGIS_SECRET}`;
     
-    let response;
+    let responseText;
     try {
-        const proxyUrl = `https://corsproxy.io/?${encodeURIComponent(url)}`;
-        response = await fetch(proxyUrl);
-    } catch {
-        const proxyUrl = `https://api.allorigins.win/raw?url=${encodeURIComponent(url)}`;
-        response = await fetch(proxyUrl);
+        responseText = await fetchWithRetry(url);
+    } catch (e: any) {
+        throw new Error(`SGIS 인증 실패: ${e.message}`);
     }
 
-    const data = await response.json();
+    const data = JSON.parse(responseText);
     if (data.errCd === 0 && data.result) {
         sgisAccessToken = data.result.accessToken;
-        // Token typically lasts 4 hours. AccessTimeout is in ms usually.
         const timeoutMs = parseInt(data.result.accessTimeout, 10) || 14400000;
         tokenExpiry = Date.now() + timeoutMs;
         return sgisAccessToken as string;
@@ -117,6 +151,7 @@ const getSgisToken = async (): Promise<string> => {
 export const searchAddress = async (address: string): Promise<any> => {
     if (!VWORLD_KEY || VWORLD_KEY.startsWith("YOUR")) throw new Error("V-World API Key가 설정되지 않았습니다.");
     let errorDetails: string[] = [];
+    
     const runSearch = async (searchType: string, category?: string) => {
         let baseUrl = `${VWORLD_BASE_URL}?service=search&request=search&version=2.0&crs=EPSG:4326&size=10&page=1&query=${encodeURIComponent(address)}&type=${searchType}&format=json&errorformat=json&key=${VWORLD_KEY}`;
         if (category) baseUrl += `&category=${category}`;
@@ -132,53 +167,61 @@ export const searchAddress = async (address: string): Promise<any> => {
             return null;
         }
     };
+    
     let item = await runSearch("ADDRESS", "road");
     if (!item) item = await runSearch("ADDRESS", "parcel");
     if (!item) item = await runSearch("PLACE");
     if (item) return item;
+    
     throw new Error(`검색 실패: ${errorDetails.length > 0 ? errorDetails.join(", ") : "결과 없음"}`);
 };
 
 export const searchZones = async (lat: number, lon: number): Promise<Zone[]> => {
     if (!DATA_API_KEY || DATA_API_KEY.startsWith("YOUR")) throw new Error("공공데이터포털 API Key가 설정되지 않았습니다.");
     const SEARCH_RADIUS = 500;
-    const zoneUrl = `${BASE_URL}/storeZoneInRadius?radius=${SEARCH_RADIUS}&cx=${lon}&cy=${lat}&serviceKey=${DATA_API_KEY}&type=json`;
+    
+    const serviceKey = getFormattedKey(DATA_API_KEY);
+    const zoneUrl = `${BASE_URL}/storeZoneInRadius?radius=${SEARCH_RADIUS}&cx=${lon}&cy=${lat}&serviceKey=${serviceKey}&type=json`;
+    
     const zoneText = await fetchWithRetry(zoneUrl);
+    
+    // Check for XML Error Response
+    if (zoneText.trim().startsWith('<')) {
+        throw new Error(parseXmlError(zoneText));
+    }
+
     let zones: Zone[] = [];
     try {
         const zoneJson = JSON.parse(zoneText);
-        if (zoneJson.body && zoneJson.body.items) zones = zoneJson.body.items.map((item: any) => ({ ...item, type: 'trade' }));
-    } catch (e) {
-        const parser = new DOMParser();
-        const xml = parser.parseFromString(zoneText, "text/xml");
-        const items = xml.getElementsByTagName("item");
-        for(let i=0; i<items.length; i++) {
-            zones.push({
-                trarNo: items[i].getElementsByTagName("trarNo")[0]?.textContent || "",
-                mainTrarNm: items[i].getElementsByTagName("mainTrarNm")[0]?.textContent || "",
-                trarArea: items[i].getElementsByTagName("trarArea")[0]?.textContent || "",
-                ctprvnNm: items[i].getElementsByTagName("ctprvnNm")[0]?.textContent || "",
-                signguNm: items[i].getElementsByTagName("signguNm")[0]?.textContent || "",
-                coords: items[i].getElementsByTagName("coords")[0]?.textContent || "",
-                stdrYm: items[i].getElementsByTagName("stdrYm")[0]?.textContent || "",
-                stdrDt: items[i].getElementsByTagName("stdrDt")[0]?.textContent || "",
-                type: 'trade'
-            });
+        if (zoneJson.body && zoneJson.body.items) {
+            zones = Array.isArray(zoneJson.body.items) ? zoneJson.body.items : [zoneJson.body.items];
+            // type: 'trade' 추가
+            zones = zones.map((item: any) => ({ ...item, type: 'trade' }));
         }
+    } catch (e) {
+        throw new Error("데이터 파싱 실패 (JSON형식이 아닙니다)");
     }
+    
     if (zones.length === 0) throw new Error("주변 상권 정보가 없습니다.");
     return zones;
 };
 
 export const fetchStores = async (zoneNo: string, onProgress: (msg: string) => void): Promise<{ stores: Store[], stdrYm: string }> => {
     if (!DATA_API_KEY) throw new Error("API Key Missing");
-    // Increased PAGE_SIZE to reduce requests (Max 1000)
-    const PAGE_SIZE = 1000;
+    const PAGE_SIZE = 500;
     let allStores: Store[] = [];
     let totalCount = 0;
     let stdrYm = "";
-    const firstUrl = `${BASE_URL}/storeListInArea?key=${zoneNo}&numOfRows=${PAGE_SIZE}&pageNo=1&serviceKey=${DATA_API_KEY}&type=json`;
+    
+    const serviceKey = getFormattedKey(DATA_API_KEY);
+    const firstUrl = `${BASE_URL}/storeListInArea?key=${zoneNo}&numOfRows=${PAGE_SIZE}&pageNo=1&serviceKey=${serviceKey}&type=json`;
+    
     const firstText = await fetchWithRetry(firstUrl);
+    
+    if (firstText.trim().startsWith('<')) {
+        throw new Error(parseXmlError(firstText));
+    }
+
     try {
         const listJson = JSON.parse(firstText);
         if (listJson.header?.stdrYm) stdrYm = String(listJson.header.stdrYm);
@@ -191,16 +234,19 @@ export const fetchStores = async (zoneNo: string, onProgress: (msg: string) => v
     } catch (e) {}
 
     const totalPages = Math.ceil(totalCount / PAGE_SIZE);
-    // Increased loop limit to cover very large areas (up to 100k items)
-    const loopLimit = Math.min(totalPages, 100);
-    
+    const loopLimit = Math.min(totalPages, 10);
     if (loopLimit > 1) {
         for (let i = 2; i <= loopLimit; i++) {
-            const nextUrl = `${BASE_URL}/storeListInArea?key=${zoneNo}&numOfRows=${PAGE_SIZE}&pageNo=${i}&serviceKey=${DATA_API_KEY}&type=json`;
+            const nextUrl = `${BASE_URL}/storeListInArea?key=${zoneNo}&numOfRows=${PAGE_SIZE}&pageNo=${i}&serviceKey=${serviceKey}&type=json`;
             try {
                 const nextText = await fetchWithRetry(nextUrl);
-                const nextJson = JSON.parse(nextText);
-                if (nextJson.body?.items) allStores = [...allStores, ...nextJson.body.items];
+                if (!nextText.trim().startsWith('<')) {
+                    const nextJson = JSON.parse(nextText);
+                    if (nextJson.body?.items) {
+                        const nextItems = Array.isArray(nextJson.body.items) ? nextJson.body.items : [nextJson.body.items];
+                        allStores = [...allStores, ...nextItems];
+                    }
+                }
             } catch (e) {}
             onProgress(`${i} / ${loopLimit} 페이지 수집 중...`);
             await new Promise(r => setTimeout(r, 100));
@@ -210,8 +256,10 @@ export const fetchStores = async (zoneNo: string, onProgress: (msg: string) => v
 };
 
 const fetchBaroApi = async (resId: string, catId: string, extraParams: string = "") => {
-    const url = `${BASE_URL}/baroApi?resId=${resId}&catId=${catId}&type=json&serviceKey=${DATA_API_KEY}${extraParams}`;
+    const serviceKey = getFormattedKey(DATA_API_KEY);
+    const url = `${BASE_URL}/baroApi?resId=${resId}&catId=${catId}&type=json&serviceKey=${serviceKey}${extraParams}`;
     const text = await fetchWithRetry(url);
+    if (text.trim().startsWith('<')) return [];
     try {
         const json = JSON.parse(text);
         if (json.body?.items) return Array.isArray(json.body.items) ? json.body.items : [json.body.items];
@@ -249,8 +297,6 @@ export const searchAdminDistrict = async (sido: string, sigungu: string, dong: s
 
                 if (matches.length > 0) {
                     filteredDongs = matches;
-                } else {
-                    console.log(`No specific match for dong: ${dong} (clean: ${cleanDong}). Showing all dongs in ${targetSigungu.signguNm}.`);
                 }
             }
 
@@ -276,10 +322,7 @@ export const searchAdminDistrict = async (sido: string, sigungu: string, dong: s
     return adminZones;
 };
 
-// --- SGIS Based Polygon Fetcher ---
-
 export const fetchLocalAdminPolygon = async (zone: Zone): Promise<number[][][]> => {
-    // 1. Check Cache
     if (polygonCache.has(zone.mainTrarNm)) {
         console.log(`[SGIS] 캐시된 경계 데이터 사용: ${zone.mainTrarNm}`);
         return polygonCache.get(zone.mainTrarNm)!;
@@ -289,43 +332,30 @@ export const fetchLocalAdminPolygon = async (zone: Zone): Promise<number[][][]> 
         console.log(`[SGIS] 행정구역 경계 데이터 요청: ${zone.mainTrarNm}`);
         const token = await getSgisToken();
         
-        // 2. Get SGIS Administrative Code (adm_cd) using Geocoding
-        // zone.mainTrarNm (e.g., "서울 강남구 삼성동") -> Geocode -> SGIS Code (e.g., "1123068")
         const geoUrl = `${SGIS_BASE_URL}/addr/geocode.json?accessToken=${token}&address=${encodeURIComponent(zone.mainTrarNm)}`;
         
-        let geoRes = await fetch(`https://corsproxy.io/?${encodeURIComponent(geoUrl)}`);
-        if (!geoRes.ok) geoRes = await fetch(`https://api.allorigins.win/raw?url=${encodeURIComponent(geoUrl)}`);
-        
-        const geoData = await geoRes.json();
+        let geoResStr = await fetchWithRetry(geoUrl);
+        const geoData = JSON.parse(geoResStr);
         
         let admCd = "";
         if (geoData.errCd === 0 && geoData.result?.resultdata?.length > 0) {
             admCd = geoData.result.resultdata[0].adm_cd;
-            console.log(`[SGIS] 행정동 코드 획득: ${admCd}`);
         } else {
             console.warn(`[SGIS] 주소 검색 실패: ${zone.mainTrarNm}`);
             return [];
         }
 
-        // 3. Fetch Boundary using adm_cd
-        // Endpoint: /boundary/hadmarea.geojson (Administrative District Boundary)
-        // low_search=0 (Retrieve boundary for the specific adm_cd)
         const boundUrl = `${SGIS_BASE_URL}/boundary/hadmarea.geojson?accessToken=${token}&adm_cd=${admCd}&low_search=0`;
-        
-        let boundRes = await fetch(`https://corsproxy.io/?${encodeURIComponent(boundUrl)}`);
-        if (!boundRes.ok) boundRes = await fetch(`https://api.allorigins.win/raw?url=${encodeURIComponent(boundUrl)}`);
-        
-        const boundData = await boundRes.json();
+        let boundResStr = await fetchWithRetry(boundUrl);
+        const boundData = JSON.parse(boundResStr);
 
         if (boundData.features && boundData.features.length > 0) {
             const geometry = boundData.features[0].geometry;
             let coords = [];
             
-            // Handle Polygon or MultiPolygon
             if (geometry.type === "Polygon") {
                 coords = geometry.coordinates;
             } else if (geometry.type === "MultiPolygon") {
-                // For MultiPolygon, find the largest ring (usually the mainland)
                 let maxLen = 0;
                 geometry.coordinates.forEach((poly: any[]) => {
                     if (poly[0].length > maxLen) {
@@ -336,19 +366,15 @@ export const fetchLocalAdminPolygon = async (zone: Zone): Promise<number[][][]> 
             }
 
             if (coords.length > 0) {
-                // 4. Transform Coordinates: UTM-K (5179) -> WGS84 (4326) -> Leaflet [lat, lon]
-                const ring = coords[0]; // Outer ring
+                const ring = coords[0];
                 const result = [ring.map((p: number[]) => {
-                    // SGIS returns [x, y] in UTM-K
                     if (typeof proj4 !== 'undefined') {
-                        // proj4 returns [lon, lat] for WGS84
                         const [lon, lat] = proj4(PROJ_5179, PROJ_WGS84, p);
-                        return [lat, lon]; // Leaflet expects [lat, lon]
+                        return [lat, lon];
                     }
-                    return [p[1], p[0]]; // Fallback (incorrect if unprojected)
+                    return [p[1], p[0]];
                 })];
 
-                // Cache the result
                 polygonCache.set(zone.mainTrarNm, result);
                 return result;
             }
@@ -361,13 +387,20 @@ export const fetchLocalAdminPolygon = async (zone: Zone): Promise<number[][][]> 
 
 export const fetchStoresInAdmin = async (adminCode: string, divId: string, onProgress: (msg: string) => void): Promise<{ stores: Store[], stdrYm: string }> => {
     if (!DATA_API_KEY) throw new Error("API Key Missing");
-    // Increased PAGE_SIZE to reduce requests (Max 1000)
-    const PAGE_SIZE = 1000;
+    const PAGE_SIZE = 500;
     let allStores: Store[] = [];
     let totalCount = 0;
     let stdrYm = "";
-    const firstUrl = `${BASE_URL}/storeListInDong?divId=${divId}&key=${adminCode}&numOfRows=${PAGE_SIZE}&pageNo=1&serviceKey=${DATA_API_KEY}&type=json`;
+    
+    const serviceKey = getFormattedKey(DATA_API_KEY);
+    const firstUrl = `${BASE_URL}/storeListInDong?divId=${divId}&key=${adminCode}&numOfRows=${PAGE_SIZE}&pageNo=1&serviceKey=${serviceKey}&type=json`;
+    
     const firstText = await fetchWithRetry(firstUrl);
+    
+    if (firstText.trim().startsWith('<')) {
+        throw new Error(parseXmlError(firstText));
+    }
+
     try {
         const listJson = JSON.parse(firstText);
         if (listJson.header?.stdrYm) stdrYm = String(listJson.header.stdrYm);
@@ -380,16 +413,19 @@ export const fetchStoresInAdmin = async (adminCode: string, divId: string, onPro
     } catch (e) {}
 
     const totalPages = Math.ceil(totalCount / PAGE_SIZE);
-    // Increased loop limit to cover very large areas (up to 100k items)
-    const loopLimit = Math.min(totalPages, 100);
-
+    const loopLimit = Math.min(totalPages, 5);
     if (loopLimit > 1) {
         for (let i = 2; i <= loopLimit; i++) {
-            const nextUrl = `${BASE_URL}/storeListInDong?divId=${divId}&key=${adminCode}&numOfRows=${PAGE_SIZE}&pageNo=${i}&serviceKey=${DATA_API_KEY}&type=json`;
+            const nextUrl = `${BASE_URL}/storeListInDong?divId=${divId}&key=${adminCode}&numOfRows=${PAGE_SIZE}&pageNo=${i}&serviceKey=${serviceKey}&type=json`;
             try {
                 const nextText = await fetchWithRetry(nextUrl);
-                const nextJson = JSON.parse(nextText);
-                if (nextJson.body?.items) allStores = [...allStores, ...nextJson.body.items];
+                if (!nextText.trim().startsWith('<')) {
+                    const nextJson = JSON.parse(nextText);
+                    if (nextJson.body?.items) {
+                        const nextItems = Array.isArray(nextJson.body.items) ? nextJson.body.items : [nextJson.body.items];
+                        allStores = [...allStores, ...nextItems];
+                    }
+                }
             } catch (e) {}
             onProgress(`${i} / ${loopLimit} 페이지 수집 중... (행정구역 데이터)`);
             await new Promise(r => setTimeout(r, 200));
