@@ -9,8 +9,6 @@ const PROJ_5174 = "+proj=tmerc +lat_0=38 +lon_0=127.0028902777778 +k=1 +x_0=2000
 
 /**
  * 환경 변수 로드 헬퍼
- * 보안 주의: 클라이언트 사이드 앱이므로 API 키가 네트워크 탭에 노출됩니다.
- * 반드시 V-World 및 공공데이터포털 콘솔에서 API 키의 'Referrer(도메인) 제한'을 설정하여 타 사이트에서의 도용을 방지하세요.
  */
 const getEnvVar = (key: string): string => {
     // @ts-ignore
@@ -228,7 +226,7 @@ export const searchAdminDistrict = async (sido: string, sigungu: string, dong: s
     return adminZones;
 };
 
-// --- Shapefile / WFS Helpers ---
+// --- Shapefile Helpers ---
 
 let cachedFeatures: any[] | null = null;
 
@@ -247,56 +245,7 @@ const getDistSq = (lat1: number, lon1: number, lat2: number, lon2: number) => {
     return Math.pow(lat1 - lat2, 2) + Math.pow(lon1 - lon2, 2);
 };
 
-// ** New: Fetch from V-World WFS (Solves missing ZIP file issue) **
-const fetchPolygonFromVWorld = async (adminCode: string): Promise<number[][][]> => {
-    if (!VWORLD_KEY) return [];
-    
-    // BaroAPI returns 10 digits (e.g. 1168064000), V-World usually expects 8 digits (11680640) for 'lt_c_admdong'.
-    const shortCode = adminCode.length >= 8 ? adminCode.substring(0, 8) : adminCode;
-
-    // Filter using XML syntax for WFS
-    const query = `<Filter><PropertyIsEqualTo><PropertyName>adm_dr_cd</PropertyName><Literal>${shortCode}</Literal></PropertyIsEqualTo></Filter>`;
-    
-    const url = `https://api.vworld.kr/req/wfs?SERVICE=WFS&REQUEST=GetFeature&TYPENAME=lt_c_admdong&OUTPUT=application/json&SRSNAME=EPSG:4326&KEY=${VWORLD_KEY}&FILTER=${encodeURIComponent(query)}`;
-
-    try {
-        console.log(`[WFS Debug] Fetching polygon for code ${shortCode}...`);
-        // Use proxy to avoid CORS issues with V-World WFS
-        const text = await fetchWithRetry(url);
-        
-        let json;
-        try {
-             json = JSON.parse(text);
-        } catch (e) {
-             console.warn("[WFS Debug] Failed to parse JSON", text.substring(0, 100));
-             return [];
-        }
-        
-        if (json.features && json.features.length > 0) {
-            console.log(`[WFS Debug] Found ${json.features.length} features.`);
-            const geometry = json.features[0].geometry;
-            if (geometry.type === 'Polygon') {
-                // GeoJSON: [lon, lat] -> Leaflet: [lat, lon]
-                return geometry.coordinates.map((ring: any[]) => ring.map((p: number[]) => [p[1], p[0]]));
-            } else if (geometry.type === 'MultiPolygon') {
-                return geometry.coordinates[0].map((ring: any[]) => ring.map((p: number[]) => [p[1], p[0]]));
-            }
-        }
-    } catch (e) {
-        console.warn("V-World WFS failed:", e);
-    }
-    return [];
-}
-
 export const fetchLocalAdminPolygon = async (zone: Zone): Promise<number[][][]> => {
-    // 1. Try V-World WFS first (Dynamically fetch data without ZIP)
-    if (zone.type === 'admin' && zone.adminCode) {
-        const wfsPolygon = await fetchPolygonFromVWorld(zone.adminCode);
-        if (wfsPolygon.length > 0) return wfsPolygon;
-        console.warn("WFS failed or empty, falling back to local ZIP file...");
-    }
-
-    // 2. Fallback to Local ZIP (BND_ADM_DONG_PG_simple.zip)
     try {
         if (!cachedFeatures) {
             // @ts-ignore
@@ -305,44 +254,27 @@ export const fetchLocalAdminPolygon = async (zone: Zone): Promise<number[][][]> 
                 return [];
             }
             
-            console.log("[Shapefile Debug] Loading local shapefile (BND_ADM_DONG_PG_simple.zip)...");
+            console.log("[Shapefile] Loading unzipped shapefiles from /shapefiles/...");
             
-            try {
-                // Cache Busting
-                const response = await fetch('/BND_ADM_DONG_PG_simple.zip?v=' + new Date().getTime());
-                
-                if (!response.ok) {
-                    throw new Error(`Failed to fetch zip file: ${response.status} ${response.statusText}`);
-                }
-                
-                // Content-Type Check: If we got HTML (e.g. 404 page), stop here
-                const contentType = response.headers.get('content-type');
-                if (contentType && contentType.includes('text/html')) {
-                     console.warn("ZIP file not found (server returned HTML). Polygon data will be unavailable.");
-                     return [];
-                }
-
-                const arrayBuffer = await response.arrayBuffer();
-                
-                if (arrayBuffer.byteLength === 0) throw new Error("File is empty.");
-
-                // Magic Number Check (PK = 0x50 0x4B)
-                const header = new Uint8Array(arrayBuffer, 0, 2);
-                if (header[0] !== 0x50 || header[1] !== 0x4B) {
-                    console.warn("File is not a valid ZIP file (Invalid Magic Number). Skip parsing.");
-                    return [];
-                }
-
-                // @ts-ignore
-                const geojson = await window.shp(arrayBuffer);
-                
-                if (Array.isArray(geojson)) cachedFeatures = geojson.flatMap(g => g.features);
-                else cachedFeatures = geojson.features;
-                
-            } catch (err) {
-                console.error("[Shapefile Debug] Error loading ZIP:", err);
-                return [];
+            // 1. Check if the .shp file exists first to avoid shpjs crashing on HTML 404
+            // Note: We expect files at /public/shapefiles/BND_ADM_DONG_PG_simple.{shp,dbf,shx}
+            // In the browser, this path is just /shapefiles/...
+            const shpUrl = '/shapefiles/BND_ADM_DONG_PG_simple.shp';
+            const checkResponse = await fetch(shpUrl, { method: 'HEAD' });
+            
+            if (!checkResponse.ok) {
+                 console.warn("Shapefile not found at /shapefiles/BND_ADM_DONG_PG_simple.shp");
+                 console.warn("Please create 'public/shapefiles' folder and extract your ZIP file there.");
+                 return [];
             }
+
+            // 2. Use shpjs to load the base path
+            // If you pass '/path/to/file', shpjs fetches file.shp and file.dbf
+            // @ts-ignore
+            const geojson = await window.shp('/shapefiles/BND_ADM_DONG_PG_simple');
+            
+            if (Array.isArray(geojson)) cachedFeatures = geojson.flatMap(g => g.features);
+            else cachedFeatures = geojson.features;
         }
         
         if (!cachedFeatures) return [];
