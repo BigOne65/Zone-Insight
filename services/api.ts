@@ -257,7 +257,6 @@ export const fetchLocalAdminPolygon = async (zone: Zone): Promise<number[][][]> 
             console.log("[Shapefile] 로컬 Shapefile 직접 로딩 중 (Manual Fetch)...");
             
             // 1. 직접 fetch를 수행하여 ArrayBuffer를 가져옵니다.
-            // shpjs 라이브러리의 내부 URL 파싱 로직을 우회하여 "Invalid URL" 오류를 방지합니다.
             const [shpRes, dbfRes] = await Promise.all([
                 fetch('/shapefiles/BND_ADM_DONG_PG_simple.shp'),
                 fetch('/shapefiles/BND_ADM_DONG_PG_simple.dbf')
@@ -272,21 +271,32 @@ export const fetchLocalAdminPolygon = async (zone: Zone): Promise<number[][][]> 
             const shpBuf = await shpRes.arrayBuffer();
             const dbfBuf = await dbfRes.arrayBuffer();
             
-            // 2. 바이너리 데이터를 직접 파싱합니다.
+            // 2. 바이너리 데이터를 파싱합니다.
             // @ts-ignore
-            const geometries = window.shp.parseShp(shpBuf);
+            const geometries = window.shp.parseShp(shpBuf); // Returns array of geometries
             // @ts-ignore
-            const properties = window.shp.parseDbf(dbfBuf); 
+            const properties = window.shp.parseDbf(dbfBuf); // Returns array of property objects
             
-            // 3. GeoJSON으로 결합합니다.
-            // @ts-ignore
-            const geojson = window.shp.combine([geometries, properties]);
-
-            if (geojson && geojson.features) {
-                cachedFeatures = geojson.features;
-                console.log(`[Shapefile] 성공적으로 로드됨: ${cachedFeatures?.length}개 행정구역`);
+            // 3. 수동으로 GeoJSON FeatureCollection 생성 (shp.combine 사용 안 함)
+            // shp.combine이 내부 URL 병합 함수와 충돌하여 Invalid URL 오류를 일으키는 문제를 방지합니다.
+            if (geometries && properties && geometries.length === properties.length) {
+                const features = geometries.map((geo: any, i: number) => ({
+                    type: "Feature",
+                    geometry: geo,
+                    properties: properties[i] || {}
+                }));
+                cachedFeatures = features;
+                console.log(`[Shapefile] 성공적으로 로드됨 (수동 병합): ${cachedFeatures?.length}개 행정구역`);
+            } else if (geometries) {
+                // DBF가 없거나 길이가 안맞는 경우 Geometry만이라도 사용
+                cachedFeatures = geometries.map((geo: any) => ({
+                    type: "Feature",
+                    geometry: geo,
+                    properties: {}
+                }));
+                 console.log(`[Shapefile] 성공적으로 로드됨 (Geometry Only): ${cachedFeatures?.length}개`);
             } else {
-                console.warn("[Shapefile] 파싱되었으나 데이터가 비어있습니다.");
+                console.warn("[Shapefile] 파싱 실패: 데이터가 없습니다.");
                 return [];
             }
         }
