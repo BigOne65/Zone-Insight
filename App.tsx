@@ -145,10 +145,10 @@ const App: React.FC = () => {
   // 행정동 선택 시 경계 데이터(Polygon) 로드 (로컬 파일 사용)
   useEffect(() => {
     const loadAdminPolygon = async () => {
-        if (previewZone && previewZone.type === 'admin' && previewZone.adminCode && (!previewZone.parsedPolygon || previewZone.parsedPolygon.length === 0)) {
+        if (previewZone && previewZone.type === 'admin' && (!previewZone.parsedPolygon || previewZone.parsedPolygon.length === 0)) {
             try {
                 // shpjs를 이용해 로컬 public/zones.zip 파일을 파싱하고 매칭되는 폴리곤을 가져옵니다.
-                const poly = await fetchLocalAdminPolygon(previewZone.adminCode);
+                const poly = await fetchLocalAdminPolygon(previewZone);
                 if (poly && poly.length > 0) {
                     setPreviewZone(prev => prev ? { ...prev, parsedPolygon: poly } : null);
                     // Update foundZones as well to cache it

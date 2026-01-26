@@ -1,5 +1,14 @@
 import { Zone, Store } from '../types';
 
+// Declare proj4 global
+declare const proj4: any;
+
+// Define Common Korean Coordinate Systems
+// EPSG:5179 (UTM-K, GRS80) - Most modern government data (Statistics Korea, NGII)
+const PROJ_5179 = "+proj=tmerc +lat_0=38 +lon_0=127.5 +k=0.9996 +x_0=1000000 +y_0=2000000 +ellps=GRS80 +towgs84=0,0,0,0,0,0,0 +units=m +no_defs";
+// EPSG:5174 (Bessel, Old) - Old cadastral maps
+const PROJ_5174 = "+proj=tmerc +lat_0=38 +lon_0=127.0028902777778 +k=1 +x_0=200000 +y_0=500000 +ellps=bessel +units=m +no_defs +towgs84=-115.80,474.99,674.11,1.16,-2.31,-1.63,6.43";
+
 // 환경 변수 안전하게 가져오기 (Crash 방지)
 const getEnvVar = (key: string): string => {
     try {
@@ -279,7 +288,7 @@ export const searchAdminDistrict = async (addressStr: string): Promise<Zone[]> =
 // --- Local Shapefile Loader (Using shpjs) ---
 let cachedFeatures: any[] | null = null; // Cache for parsed features
 
-export const fetchLocalAdminPolygon = async (adminCode: string): Promise<number[][][]> => {
+export const fetchLocalAdminPolygon = async (zone: Zone): Promise<number[][][]> => {
     try {
         // 1. Load zones.zip if not cached
         if (!cachedFeatures) {
@@ -289,8 +298,8 @@ export const fetchLocalAdminPolygon = async (adminCode: string): Promise<number[
                 return [];
             }
             
+            console.log("Loading local shapefile (zones.zip)...");
             // Fetch from public folder
-            // NOTE: User MUST put 'zones.zip' in the 'public' folder
             // @ts-ignore
             const geojson = await window.shp('/zones.zip');
             
@@ -300,39 +309,91 @@ export const fetchLocalAdminPolygon = async (adminCode: string): Promise<number[
             } else {
                  cachedFeatures = geojson.features;
             }
+            console.log("Shapefile loaded. Total features:", cachedFeatures?.length);
         }
         
         if (!cachedFeatures) return [];
 
-        // 2. Find feature matching the adminCode
-        // BaroAPI code is 10 digits (e.g., 1168058000). 
-        // Shapefile attributes usually have 'ADM_DR_CD' which is 8 digits (e.g., 11680580).
-        // We match the first 8 digits.
+        const adminCode = zone.adminCode || "";
         const targetCode8 = adminCode.substring(0, 8);
         
-        const feature = cachedFeatures.find((f: any) => {
+        // Extract Dong Name from mainTrarNm (format: "Sido Sigungu Dong")
+        const nameParts = zone.mainTrarNm.split(" ");
+        const dongName = nameParts.length >= 3 ? nameParts[nameParts.length - 1] : "";
+
+        // 2. Find feature matching
+        let feature = cachedFeatures.find((f: any) => {
             const props = f.properties || {};
-            // Check common field names for Admin Dong Code
-            const fileCode = String(props.ADM_DR_CD || props.adm_dr_cd || props.adm_cd || props.ADM_CD || "");
-            return fileCode === adminCode || fileCode === targetCode8 || fileCode.startsWith(targetCode8);
+            
+            // Strategy A: Check Code (if SGIS code matches MOIS prefix - unlikely but possible)
+            // Attributes might be lower or upper case
+            const fileCode = String(props.ADM_DR_CD || props.adm_dr_cd || props.adm_cd || props.ADM_CD || "").trim();
+            if (fileCode && (fileCode === adminCode || fileCode === targetCode8 || fileCode.startsWith(targetCode8))) {
+                return true;
+            }
+            return false;
         });
 
-        if (feature && feature.geometry) {
-            let coords: any[] = [];
-            
-            if (feature.geometry.type === "Polygon") {
-                coords = feature.geometry.coordinates;
-            } else if (feature.geometry.type === "MultiPolygon") {
-                // Use the largest polygon or the first one
-                coords = feature.geometry.coordinates[0];
+        // Strategy B: Check Name (Fallback - SGIS codes are different from MOIS codes)
+        if (!feature && dongName) {
+            // console.log("Code match failed, trying name match for:", dongName);
+            feature = cachedFeatures.find((f: any) => {
+                const props = f.properties || {};
+                const fileName = String(props.ADM_DR_NM || props.adm_dr_nm || "").trim();
+                return fileName === dongName;
+            });
+        }
+        
+        if (!feature) {
+             console.warn(`Feature not found for: ${zone.mainTrarNm} (Code: ${adminCode}, Name: ${dongName})`);
+             // Debug log to help user see what properties are available
+             if (cachedFeatures.length > 0) {
+                 console.log("Sample properties from file:", cachedFeatures[0].properties);
+             }
+             return [];
+        }
+
+        // 3. Process Geometry & Reproject if needed
+        let coords: any[] = [];
+        if (feature.geometry.type === "Polygon") {
+            coords = feature.geometry.coordinates;
+        } else if (feature.geometry.type === "MultiPolygon") {
+            // Use the largest polygon or the first one
+            coords = feature.geometry.coordinates[0];
+        }
+
+        if (coords.length > 0) {
+            // Check first point to see if projection is needed
+            // GeoJSON usually [lon, lat] or [x, y]
+            const testPoint = coords[0][0]; 
+            const x = testPoint[0];
+            const y = testPoint[1];
+
+            let needsProj = false;
+            let srcProj = PROJ_5179; // Default assumption for modern Gov data (UTM-K)
+
+            // If coordinates are large (not lat/lon), they need projection
+            if (x > 180 || y > 90) {
+                needsProj = true;
+                // Simple heuristic to distinguish 5179 vs 5174
+                // 5179 x_0 is 1,000,000. 5174 x_0 is 200,000.
+                if (x < 600000) srcProj = PROJ_5174;
             }
 
-            // 3. Flip coordinates: GeoJSON is [lon, lat], Leaflet needs [lat, lon]
-            if (coords.length > 0) {
-                 return coords.map((ring: number[][]) => 
-                    ring.map((c: number[]) => [c[1], c[0]])
-                );
-            }
+            return coords.map((ring: number[][]) => 
+                ring.map((c: number[]) => {
+                    let [px, py] = c;
+                    
+                    if (needsProj && typeof proj4 !== 'undefined') {
+                        // proj4(source, dest, point) -> returns [lon, lat]
+                        const [lon, lat] = proj4(srcProj, 'EPSG:4326', [px, py]);
+                        return [lat, lon]; // Leaflet wants [lat, lon]
+                    }
+                    
+                    // If already lat/lon (WGS84), GeoJSON is [lon, lat], Leaflet needs [lat, lon]
+                    return [c[1], c[0]];
+                })
+            );
         }
     } catch (e) {
         console.warn("Failed to load/parse local shapefile:", e);
