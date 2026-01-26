@@ -234,9 +234,10 @@ export const fetchStores = async (zoneNo: string, onProgress: (msg: string) => v
     } catch (e) {}
 
     const totalPages = Math.ceil(totalCount / PAGE_SIZE);
-    const loopLimit = Math.min(totalPages, 10);
-    if (loopLimit > 1) {
-        for (let i = 2; i <= loopLimit; i++) {
+    
+    // 기존 루프 제한 해제 (loopLimit 삭제)
+    if (totalPages > 1) {
+        for (let i = 2; i <= totalPages; i++) {
             const nextUrl = `${BASE_URL}/storeListInArea?key=${zoneNo}&numOfRows=${PAGE_SIZE}&pageNo=${i}&serviceKey=${serviceKey}&type=json`;
             try {
                 const nextText = await fetchWithRetry(nextUrl);
@@ -248,7 +249,7 @@ export const fetchStores = async (zoneNo: string, onProgress: (msg: string) => v
                     }
                 }
             } catch (e) {}
-            onProgress(`${i} / ${loopLimit} 페이지 수집 중...`);
+            onProgress(`${i} / ${totalPages} 페이지 수집 중...`);
             await new Promise(r => setTimeout(r, 100));
         }
     }
@@ -413,9 +414,10 @@ export const fetchStoresInAdmin = async (adminCode: string, divId: string, onPro
     } catch (e) {}
 
     const totalPages = Math.ceil(totalCount / PAGE_SIZE);
-    const loopLimit = Math.min(totalPages, 5);
-    if (loopLimit > 1) {
-        for (let i = 2; i <= loopLimit; i++) {
+    
+    // 기존 루프 제한 해제 (loopLimit 삭제)
+    if (totalPages > 1) {
+        for (let i = 2; i <= totalPages; i++) {
             const nextUrl = `${BASE_URL}/storeListInDong?divId=${divId}&key=${adminCode}&numOfRows=${PAGE_SIZE}&pageNo=${i}&serviceKey=${serviceKey}&type=json`;
             try {
                 const nextText = await fetchWithRetry(nextUrl);
@@ -427,7 +429,7 @@ export const fetchStoresInAdmin = async (adminCode: string, divId: string, onPro
                     }
                 }
             } catch (e) {}
-            onProgress(`${i} / ${loopLimit} 페이지 수집 중... (행정구역 데이터)`);
+            onProgress(`${i} / ${totalPages} 페이지 수집 중... (행정구역 데이터)`);
             await new Promise(r => setTimeout(r, 200));
         }
     }
