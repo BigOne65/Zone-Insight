@@ -254,32 +254,41 @@ export const fetchLocalAdminPolygon = async (zone: Zone): Promise<number[][][]> 
                 return [];
             }
             
-            console.log("[Shapefile] 로컬 Shapefile 로딩 중... (/shapefiles/BND_ADM_DONG_PG_simple)");
+            console.log("[Shapefile] 로컬 Shapefile 직접 로딩 중 (Manual Fetch)...");
             
-            // 1. .shp 파일 존재 여부 사전 체크 (404 오류 방지 및 디버깅용)
-            // 주의: 이 경로는 'public/shapefiles/BND_ADM_DONG_PG_simple.shp'에 파일이 있어야 함을 의미합니다.
-            const shpUrl = '/shapefiles/BND_ADM_DONG_PG_simple.shp';
+            // 1. 직접 fetch를 수행하여 ArrayBuffer를 가져옵니다.
+            // shpjs 라이브러리의 내부 URL 파싱 로직을 우회하여 "Invalid URL" 오류를 방지합니다.
+            const [shpRes, dbfRes] = await Promise.all([
+                fetch('/shapefiles/BND_ADM_DONG_PG_simple.shp'),
+                fetch('/shapefiles/BND_ADM_DONG_PG_simple.dbf')
+            ]);
             
-            // HEAD 요청으로 파일 존재 여부만 빠르게 확인
-            try {
-                const checkResponse = await fetch(shpUrl, { method: 'HEAD' });
-                if (!checkResponse.ok) {
-                     console.error(`[Shapefile Error] 파일을 찾을 수 없습니다. (Status: ${checkResponse.status})`);
-                     console.warn("중요: 프로젝트의 'public/shapefiles' 폴더 안에 'BND_ADM_DONG_PG_simple.shp' 파일이 있는지 확인해주세요.");
-                     return [];
-                }
-            } catch (networkErr) {
-                console.warn("[Shapefile Warning] 파일 존재 여부 확인 실패 (네트워크 차단 등). 로딩을 계속 시도합니다.");
+            if (!shpRes.ok || !dbfRes.ok) {
+                console.error(`[Shapefile] 파일을 찾을 수 없습니다. SHP: ${shpRes.status}, DBF: ${dbfRes.status}`);
+                console.warn("중요: 'public/shapefiles/' 폴더 안에 .shp와 .dbf 파일이 압축이 풀린 상태로 존재하는지 확인해주세요.");
+                return [];
             }
 
-            // 2. shpjs 라이브러리로 파일 로드
-            // '/shapefiles/BND_ADM_DONG_PG_simple' 경로를 넘기면
-            // 라이브러리가 자동으로 .shp와 .dbf 파일을 찾아 다운로드합니다.
-            // @ts-ignore
-            const geojson = await window.shp('/shapefiles/BND_ADM_DONG_PG_simple');
+            const shpBuf = await shpRes.arrayBuffer();
+            const dbfBuf = await dbfRes.arrayBuffer();
             
-            if (Array.isArray(geojson)) cachedFeatures = geojson.flatMap(g => g.features);
-            else cachedFeatures = geojson.features;
+            // 2. 바이너리 데이터를 직접 파싱합니다.
+            // @ts-ignore
+            const geometries = window.shp.parseShp(shpBuf);
+            // @ts-ignore
+            const properties = window.shp.parseDbf(dbfBuf); 
+            
+            // 3. GeoJSON으로 결합합니다.
+            // @ts-ignore
+            const geojson = window.shp.combine([geometries, properties]);
+
+            if (geojson && geojson.features) {
+                cachedFeatures = geojson.features;
+                console.log(`[Shapefile] 성공적으로 로드됨: ${cachedFeatures?.length}개 행정구역`);
+            } else {
+                console.warn("[Shapefile] 파싱되었으나 데이터가 비어있습니다.");
+                return [];
+            }
         }
         
         if (!cachedFeatures) return [];
