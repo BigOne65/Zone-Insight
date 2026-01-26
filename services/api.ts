@@ -7,15 +7,17 @@ declare const proj4: any;
 const PROJ_5179 = "+proj=tmerc +lat_0=38 +lon_0=127.5 +k=0.9996 +x_0=1000000 +y_0=2000000 +ellps=GRS80 +towgs84=0,0,0,0,0,0,0 +units=m +no_defs";
 const PROJ_5174 = "+proj=tmerc +lat_0=38 +lon_0=127.0028902777778 +k=1 +x_0=200000 +y_0=500000 +ellps=bessel +units=m +no_defs +towgs84=-115.80,474.99,674.11,1.16,-2.31,-1.63,6.43";
 
+/**
+ * 환경 변수 로드 헬퍼
+ * 보안 주의: 클라이언트 사이드 앱이므로 API 키가 네트워크 탭에 노출됩니다.
+ * 반드시 V-World 및 공공데이터포털 콘솔에서 API 키의 'Referrer(도메인) 제한'을 설정하여 타 사이트에서의 도용을 방지하세요.
+ */
 const getEnvVar = (key: string): string => {
-    try {
+    // @ts-ignore
+    if (typeof import.meta !== 'undefined' && import.meta.env) {
         // @ts-ignore
-        if (typeof import.meta !== 'undefined' && import.meta.env) return import.meta.env[key] || "";
-    } catch (e) { }
-    try {
-        // @ts-ignore
-        if (typeof process !== 'undefined' && process.env) return process.env[key] || "";
-    } catch (e) { }
+        return import.meta.env[key] || "";
+    }
     return "";
 };
 
@@ -23,6 +25,8 @@ const DATA_API_KEY = getEnvVar("VITE_DATA_API_KEY");
 const VWORLD_KEY = getEnvVar("VITE_VWORLD_KEY");
 const BASE_URL = "http://apis.data.go.kr/B553077/api/open/sdsc2";
 const VWORLD_BASE_URL = "https://api.vworld.kr/req/search";
+
+// --- Network Helpers ---
 
 const fetchJsonp = (url: string, callbackParam = 'callback'): Promise<any> => {
     return new Promise((resolve, reject) => {
@@ -63,8 +67,10 @@ const fetchWithRetry = async (targetUrl: string): Promise<string> => {
     throw new Error("All proxies failed");
 };
 
+// --- API Functions ---
+
 export const searchAddress = async (address: string): Promise<any> => {
-    if (!VWORLD_KEY) throw new Error("V-World API Key가 설정되지 않았습니다.");
+    if (!VWORLD_KEY) throw new Error("V-World API Key가 설정되지 않았습니다. .env 파일을 확인해주세요.");
     let errorDetails: string[] = [];
     const runSearch = async (searchType: string, category?: string) => {
         let baseUrl = `${VWORLD_BASE_URL}?service=search&request=search&version=2.0&crs=EPSG:4326&size=10&page=1&query=${encodeURIComponent(address)}&type=${searchType}&format=json&errorformat=json&key=${VWORLD_KEY}`;
@@ -89,7 +95,7 @@ export const searchAddress = async (address: string): Promise<any> => {
 };
 
 export const searchZones = async (lat: number, lon: number): Promise<Zone[]> => {
-    if (!DATA_API_KEY) throw new Error("Data.go.kr API Key가 설정되지 않았습니다.");
+    if (!DATA_API_KEY) throw new Error("공공데이터포털 API Key가 설정되지 않았습니다. .env 파일을 확인해주세요.");
     const SEARCH_RADIUS = 500;
     const zoneUrl = `${BASE_URL}/storeZoneInRadius?radius=${SEARCH_RADIUS}&cx=${lon}&cy=${lat}&serviceKey=${DATA_API_KEY}&type=json`;
     const zoneText = await fetchWithRetry(zoneUrl);
@@ -241,22 +247,19 @@ const getDistSq = (lat1: number, lon1: number, lat2: number, lon2: number) => {
     return Math.pow(lat1 - lat2, 2) + Math.pow(lon1 - lon2, 2);
 };
 
-// ** New: Fetch from V-World WFS **
+// V-World WFS를 통해 행정구역 경계 데이터 가져오기 (동적 폴백)
 const fetchPolygonFromVWorld = async (adminCode: string): Promise<number[][][]> => {
     if (!VWORLD_KEY) return [];
     
-    // Admin Code from Data.go.kr is usually 10 digits (e.g., 1168064000).
-    // V-World lt_c_admdong uses 8 digits (e.g., 11680640).
+    // 데이터 포털 코드는 10자리(예: 1168064000)이나 V-World는 8자리(11680640)를 사용할 수 있음
     const shortCode = adminCode.length >= 8 ? adminCode.substring(0, 8) : adminCode;
 
-    // Filter using XML syntax for WFS
     const query = `<Filter><PropertyIsEqualTo><PropertyName>adm_dr_cd</PropertyName><Literal>${shortCode}</Literal></PropertyIsEqualTo></Filter>`;
     
     const url = `https://api.vworld.kr/req/wfs?SERVICE=WFS&REQUEST=GetFeature&TYPENAME=lt_c_admdong&OUTPUT=application/json&SRSNAME=EPSG:4326&KEY=${VWORLD_KEY}&FILTER=${encodeURIComponent(query)}`;
 
     try {
         console.log(`[WFS Debug] Fetching polygon for code ${shortCode}...`);
-        // Use proxy to avoid CORS issues with V-World WFS
         const text = await fetchWithRetry(url);
         
         let json;
@@ -271,13 +274,10 @@ const fetchPolygonFromVWorld = async (adminCode: string): Promise<number[][][]> 
             console.log(`[WFS Debug] Found ${json.features.length} features.`);
             const geometry = json.features[0].geometry;
             if (geometry.type === 'Polygon') {
-                // GeoJSON: [lon, lat] -> Leaflet: [lat, lon]
                 return geometry.coordinates.map((ring: any[]) => ring.map((p: number[]) => [p[1], p[0]]));
             } else if (geometry.type === 'MultiPolygon') {
                 return geometry.coordinates[0].map((ring: any[]) => ring.map((p: number[]) => [p[1], p[0]]));
             }
-        } else {
-             console.log("[WFS Debug] No features found for this code.");
         }
     } catch (e) {
         console.warn("V-World WFS failed:", e);
@@ -286,14 +286,14 @@ const fetchPolygonFromVWorld = async (adminCode: string): Promise<number[][][]> 
 }
 
 export const fetchLocalAdminPolygon = async (zone: Zone): Promise<number[][][]> => {
-    // 1. If it's an Admin Zone with a code, try V-World WFS first
+    // 1. API 키가 있고 행정동 코드가 있으면 V-World WFS 우선 시도
     if (zone.type === 'admin' && zone.adminCode) {
         const wfsPolygon = await fetchPolygonFromVWorld(zone.adminCode);
         if (wfsPolygon.length > 0) return wfsPolygon;
         console.warn("Falling back to local ZIP file...");
     }
 
-    // 2. Fallback to Local ZIP (BND_ADM_DONG_PG_simple.zip)
+    // 2. Local ZIP (BND_ADM_DONG_PG_simple.zip) 폴백
     try {
         if (!cachedFeatures) {
             // @ts-ignore
@@ -305,15 +305,16 @@ export const fetchLocalAdminPolygon = async (zone: Zone): Promise<number[][][]> 
             console.log("[Shapefile Debug] Loading local shapefile (BND_ADM_DONG_PG_simple.zip)...");
             
             try {
-                const response = await fetch('/BND_ADM_DONG_PG_simple.zip');
+                // Cache Busting: 타임스탬프를 추가하여 캐시된 404 페이지 방지
+                const response = await fetch('/BND_ADM_DONG_PG_simple.zip?v=' + new Date().getTime());
                 
                 if (!response.ok) {
                     throw new Error(`Failed to fetch zip file: ${response.status} ${response.statusText}`);
                 }
                 
+                // HTML 반환 체크 (Soft 404)
                 const contentType = response.headers.get('content-type');
                 if (contentType && contentType.includes('text/html')) {
-                     // Treat as soft 404
                      console.warn("ZIP file not found (server returned HTML). Polygons may not load.");
                      return [];
                 }
@@ -321,6 +322,13 @@ export const fetchLocalAdminPolygon = async (zone: Zone): Promise<number[][][]> 
                 const arrayBuffer = await response.arrayBuffer();
                 
                 if (arrayBuffer.byteLength === 0) throw new Error("File is empty.");
+
+                // Magic Number Check (PK = 0x50 0x4B)
+                const header = new Uint8Array(arrayBuffer, 0, 2);
+                if (header[0] !== 0x50 || header[1] !== 0x4B) {
+                    console.warn("File is not a valid ZIP file (Invalid Magic Number).");
+                    return [];
+                }
 
                 // @ts-ignore
                 const geojson = await window.shp(arrayBuffer);
@@ -377,21 +385,11 @@ export const fetchLocalAdminPolygon = async (zone: Zone): Promise<number[][][]> 
                         }
                     }
                 }
+                // 재검색 로직 중복 제거 및 최적화
                 targetFeature = candidates.find(f => {
-                     // Basic check if we picked the right one logic can be here, 
-                     // but loop above finds closest centroid.
-                     // Re-find based on logic or assign directly in loop.
-                     // Let's just use the one from loop logic if I stored it.
-                     return false; 
-                });
-                // Reset for clean implementation
-                minDist = Infinity;
-                targetFeature = null;
-                
-                for (const feature of candidates) {
                      let coords = [];
-                     if (feature.geometry.type === "Polygon") coords = feature.geometry.coordinates[0];
-                     else if (feature.geometry.type === "MultiPolygon") coords = feature.geometry.coordinates[0][0];
+                     if (f.geometry.type === "Polygon") coords = f.geometry.coordinates[0];
+                     else if (f.geometry.type === "MultiPolygon") coords = f.geometry.coordinates[0][0];
                      
                      if(coords.length > 0) {
                          let sumX = 0, sumY = 0, count = 0;
@@ -399,11 +397,10 @@ export const fetchLocalAdminPolygon = async (zone: Zone): Promise<number[][][]> 
                          const avgX = sumX/count; const avgY = sumY/count;
                          let [cLat, cLon] = [avgY, avgX];
                          if(avgX > 180) [cLat, cLon] = projectPoint(avgX, avgY);
-                         
-                         const dist = getDistSq(cLat, cLon, zone.searchLat, zone.searchLon);
-                         if(dist < minDist) { minDist = dist; targetFeature = feature; }
+                         return Math.abs(getDistSq(cLat, cLon, zone.searchLat!, zone.searchLon!) - minDist) < 0.000001;
                      }
-                }
+                     return false;
+                });
             } else {
                 targetFeature = candidates[0];
             }
