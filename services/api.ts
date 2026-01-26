@@ -254,22 +254,27 @@ export const fetchLocalAdminPolygon = async (zone: Zone): Promise<number[][][]> 
                 return [];
             }
             
-            console.log("[Shapefile] Loading unzipped shapefiles from /shapefiles/...");
+            console.log("[Shapefile] 로컬 Shapefile 로딩 중... (/shapefiles/BND_ADM_DONG_PG_simple)");
             
-            // 1. Check if the .shp file exists first to avoid shpjs crashing on HTML 404
-            // Note: We expect files at /public/shapefiles/BND_ADM_DONG_PG_simple.{shp,dbf,shx}
-            // In the browser, this path is just /shapefiles/...
+            // 1. .shp 파일 존재 여부 사전 체크 (404 오류 방지 및 디버깅용)
+            // 주의: 이 경로는 'public/shapefiles/BND_ADM_DONG_PG_simple.shp'에 파일이 있어야 함을 의미합니다.
             const shpUrl = '/shapefiles/BND_ADM_DONG_PG_simple.shp';
-            const checkResponse = await fetch(shpUrl, { method: 'HEAD' });
             
-            if (!checkResponse.ok) {
-                 console.warn("Shapefile not found at /shapefiles/BND_ADM_DONG_PG_simple.shp");
-                 console.warn("Please create 'public/shapefiles' folder and extract your ZIP file there.");
-                 return [];
+            // HEAD 요청으로 파일 존재 여부만 빠르게 확인
+            try {
+                const checkResponse = await fetch(shpUrl, { method: 'HEAD' });
+                if (!checkResponse.ok) {
+                     console.error(`[Shapefile Error] 파일을 찾을 수 없습니다. (Status: ${checkResponse.status})`);
+                     console.warn("중요: 프로젝트의 'public/shapefiles' 폴더 안에 'BND_ADM_DONG_PG_simple.shp' 파일이 있는지 확인해주세요.");
+                     return [];
+                }
+            } catch (networkErr) {
+                console.warn("[Shapefile Warning] 파일 존재 여부 확인 실패 (네트워크 차단 등). 로딩을 계속 시도합니다.");
             }
 
-            // 2. Use shpjs to load the base path
-            // If you pass '/path/to/file', shpjs fetches file.shp and file.dbf
+            // 2. shpjs 라이브러리로 파일 로드
+            // '/shapefiles/BND_ADM_DONG_PG_simple' 경로를 넘기면
+            // 라이브러리가 자동으로 .shp와 .dbf 파일을 찾아 다운로드합니다.
             // @ts-ignore
             const geojson = await window.shp('/shapefiles/BND_ADM_DONG_PG_simple');
             
@@ -320,7 +325,7 @@ export const fetchLocalAdminPolygon = async (zone: Zone): Promise<number[][][]> 
                         }
                     }
                 }
-                // Recalculate or just use the logic result (simplified for stability)
+                // 재검색 최적화
                 targetFeature = candidates.find(f => {
                      let coords = [];
                      if (f.geometry.type === "Polygon") coords = f.geometry.coordinates[0];
@@ -362,7 +367,7 @@ export const fetchLocalAdminPolygon = async (zone: Zone): Promise<number[][][]> 
             );
         }
     } catch (e) {
-        console.warn("Unexpected error in fetchLocalAdminPolygon:", e);
+        console.warn("Shapefile 로딩 중 오류 발생:", e);
     }
     return [];
 };
