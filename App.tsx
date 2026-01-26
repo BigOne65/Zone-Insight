@@ -3,7 +3,7 @@ import { PieChart, Pie, Cell, BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveCo
 import * as Icons from './components/Icons';
 import TradeMap from './components/Map';
 import GoogleAd from './components/GoogleAd'; // Import Ad Component
-import { searchAddress, searchZones, fetchStores, searchAdminDistrict, fetchStoresInAdmin, fetchLocalAdminPolygon } from './services/api';
+import { searchAddress, searchZones, fetchStores, searchAdminDistrict, fetchStoresInAdmin } from './services/api';
 import { Zone, Store, StoreStats } from './types';
 
 // Constants
@@ -68,7 +68,6 @@ const App: React.FC = () => {
   
   // Search Settings
   const [searchType, setSearchType] = useState<'trade' | 'admin'>('trade'); // 'trade' = 주요상권, 'admin' = 행정구역
-  const [adminInfo, setAdminInfo] = useState<{sido: string, sigungu: string, dong: string} | null>(null);
 
   const [searchCoords, setSearchCoords] = useState<{lat: number, lon: number}>({ lat: 37.5665, lon: 126.9780 });
   const [resolvedAddress, setResolvedAddress] = useState("");
@@ -101,29 +100,6 @@ const App: React.FC = () => {
       const lon = parseFloat(item.point.x);
       setSearchCoords({ lat, lon });
       setResolvedAddress(item.address?.road || item.address?.parcel || item.title);
-      
-      // Parse Admin Info from V-World result
-      let sido = "", sigungu = "", dong = "";
-      if (item.address?.structure) {
-          sido = item.address.structure.level1 || "";
-          sigungu = item.address.structure.level2 || "";
-          dong = item.address.structure.level3 || "";
-      } 
-      // Fallback: Parse parcel address (Jibun)
-      if ((!sido || !sigungu) && item.address?.parcel) {
-          const parts = item.address.parcel.split(" ");
-          if (parts.length >= 1) sido = parts[0];
-          if (parts.length >= 2) sigungu = parts[1];
-          if (parts.length >= 3) dong = parts[2];
-      }
-      // Fallback: Parse road address
-      if ((!sido || !sigungu) && item.address?.road) {
-          const parts = item.address.road.split(" ");
-          if (parts.length >= 1) sido = parts[0];
-          if (parts.length >= 2) sigungu = parts[1];
-      }
-      
-      setAdminInfo({ sido, sigungu, dong });
       setStep('verify_location');
     } catch (err: any) {
       setError(err.message);
@@ -148,10 +124,7 @@ const App: React.FC = () => {
           setFoundZones(enhancedZones);
       } else {
           setLoadingMsg("해당 주소의 행정구역(동) 정보를 조회하고 있습니다...");
-          if (!adminInfo || !adminInfo.sido || !adminInfo.sigungu) {
-              throw new Error("행정구역 정보(시/군/구)를 정확히 파악하지 못했습니다. 주소를 더 상세히 입력해주세요.");
-          }
-          const zones = await searchAdminDistrict(adminInfo.sido, adminInfo.sigungu, adminInfo.dong);
+          const zones = await searchAdminDistrict(resolvedAddress);
           const enhancedZones = zones.map(z => ({
               ...z,
               searchLat: searchCoords.lat, // Use geocoded center as default map center
@@ -168,26 +141,6 @@ const App: React.FC = () => {
       setLoading(false);
     }
   };
-
-  // 행정동 선택 시 경계 데이터(Polygon) 로드 (로컬 파일 사용)
-  useEffect(() => {
-    const loadAdminPolygon = async () => {
-        if (previewZone && previewZone.type === 'admin' && (!previewZone.parsedPolygon || previewZone.parsedPolygon.length === 0)) {
-            try {
-                // shpjs를 이용해 로컬 public/zones.zip 파일을 파싱하고 매칭되는 폴리곤을 가져옵니다.
-                const poly = await fetchLocalAdminPolygon(previewZone);
-                if (poly && poly.length > 0) {
-                    setPreviewZone(prev => prev ? { ...prev, parsedPolygon: poly } : null);
-                    // Update foundZones as well to cache it
-                    setFoundZones(prev => prev.map(z => z.trarNo === previewZone.trarNo ? { ...z, parsedPolygon: poly } : z));
-                }
-            } catch (e) {
-                console.error("Polygon fetch failed", e);
-            }
-        }
-    };
-    loadAdminPolygon();
-  }, [previewZone]);
 
   const handleAnalyzeZone = async (selectedZone: Zone) => {
     setLoading(true); setLoadingMsg("상권 상세 데이터를 분석하고 있습니다..."); setError(null);
@@ -551,15 +504,14 @@ const App: React.FC = () => {
                         </div>
                         {previewZone?.trarNo === z.trarNo && (
                             <div className="mt-4 pt-4 border-t border-blue-200 animate-fade-in">
-                                 {/* Admin mode might not have polygons initially, but fetched on expand */}
+                                 {/* Admin mode might not have polygons */}
                                  {(z.parsedPolygon || searchType === 'trade') ? (
                                      <div className="h-64 w-full rounded-lg overflow-hidden border border-gray-300 mb-3 relative z-0">
                                         <TradeMap lat={z.searchLat!} lon={z.searchLon!} polygonCoords={z.parsedPolygon} tradeName={z.mainTrarNm}/>
                                      </div>
                                  ) : (
-                                     <div className="bg-gray-50 border border-gray-200 rounded-lg p-4 mb-3 text-center text-gray-500 text-sm flex flex-col items-center justify-center gap-2 min-h-[150px]">
-                                         <div className="loading-spinner mb-2" />
-                                         <span>행정 구역 경계 데이터를 불러오는 중입니다...</span>
+                                     <div className="bg-gray-50 border border-gray-200 rounded-lg p-4 mb-3 text-center text-gray-500 text-sm">
+                                         * 행정구역 분석은 상세 지도 영역 표시를 지원하지 않습니다.
                                      </div>
                                  )}
                                  <button onClick={(e) => { e.stopPropagation(); handleAnalyzeZone(z); }} className={`w-full text-white px-6 py-3 rounded-lg font-bold hover:opacity-90 transition flex items-center justify-center gap-2 ${searchType === 'trade' ? 'bg-blue-600' : 'bg-green-600'}`}>
