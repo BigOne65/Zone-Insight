@@ -3,7 +3,7 @@ import { PieChart, Pie, Cell, BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveCo
 import * as Icons from './components/Icons';
 import TradeMap from './components/Map';
 import GoogleAd from './components/GoogleAd'; // Import Ad Component
-import { searchAddress, searchZones, fetchStores, searchAdminDistrict, fetchStoresInAdmin, fetchAdminPolygon } from './services/api';
+import { searchAddress, searchZones, fetchStores, searchAdminDistrict, fetchStoresInAdmin, fetchLocalAdminPolygon } from './services/api';
 import { Zone, Store, StoreStats } from './types';
 
 // Constants
@@ -142,13 +142,13 @@ const App: React.FC = () => {
     }
   };
 
-  // 행정동 선택 시 경계 데이터(Polygon) 로드
+  // 행정동 선택 시 경계 데이터(Polygon) 로드 (로컬 파일 사용)
   useEffect(() => {
     const loadAdminPolygon = async () => {
         if (previewZone && previewZone.type === 'admin' && previewZone.adminCode && (!previewZone.parsedPolygon || previewZone.parsedPolygon.length === 0)) {
             try {
-                // Polygon 로딩 중임을 알리거나 조용히 로드
-                const poly = await fetchAdminPolygon(previewZone.adminCode);
+                // shpjs를 이용해 로컬 public/zones.zip 파일을 파싱하고 매칭되는 폴리곤을 가져옵니다.
+                const poly = await fetchLocalAdminPolygon(previewZone.adminCode);
                 if (poly && poly.length > 0) {
                     setPreviewZone(prev => prev ? { ...prev, parsedPolygon: poly } : null);
                     // Update foundZones as well to cache it

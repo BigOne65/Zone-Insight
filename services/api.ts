@@ -28,7 +28,6 @@ const VWORLD_KEY = getEnvVar("VITE_VWORLD_KEY");
 
 const BASE_URL = "http://apis.data.go.kr/B553077/api/open/sdsc2";
 const VWORLD_BASE_URL = "https://api.vworld.kr/req/search";
-const VWORLD_DATA_URL = "https://api.vworld.kr/req/data";
 
 // Helper: JSONP for V-World
 const fetchJsonp = (url: string, callbackParam = 'callback'): Promise<any> => {
@@ -277,43 +276,66 @@ export const searchAdminDistrict = async (addressStr: string): Promise<Zone[]> =
     return adminZones;
 };
 
-// V-World Data API to fetch Polygon for Admin District
-export const fetchAdminPolygon = async (adminCode: string): Promise<number[][][]> => {
-    if (!VWORLD_KEY) return [];
+// --- Local Shapefile Loader (Using shpjs) ---
+let cachedFeatures: any[] | null = null; // Cache for parsed features
 
-    // V-World Data API URL: https://api.vworld.kr/req/data
-    // LT_C_ADSTRD_INFO: 행정동 경계 (Administrative Dong)
-    // LT_C_ADEMD_INFO: 읍면동(법정동) 경계 (Legal Dong)
-    
-    // adminCode from BaroAPI is usually 10 digits (e.g., 1168058000).
-    // V-World matching often works best with 8 digits (Sido 2 + Sig 3 + Dong 3).
-    const searchCode = adminCode.length >= 8 ? adminCode.substring(0, 8) : adminCode;
-    
-    // Change layer to LT_C_ADSTRD_INFO and attrFilter to adm_dr_cd
-    const url = `${VWORLD_DATA_URL}?service=data&request=GetFeature&data=LT_C_ADSTRD_INFO&key=${VWORLD_KEY}&domain=localhost&attrFilter=adm_dr_cd:like:${searchCode}&format=json&geometry=true&size=1&crs=EPSG:4326`;
-    
+export const fetchLocalAdminPolygon = async (adminCode: string): Promise<number[][][]> => {
     try {
-        const text = await fetchWithRetry(url);
-        const json = JSON.parse(text);
-        
-        if (json.response && json.response.status === "OK" && json.response.result?.featureCollection?.features?.length > 0) {
-            const feature = json.response.result.featureCollection.features[0];
-            const geometry = feature.geometry;
+        // 1. Load zones.zip if not cached
+        if (!cachedFeatures) {
+            // @ts-ignore
+            if (typeof window.shp === 'undefined') {
+                console.error("shpjs library not loaded");
+                return [];
+            }
             
-            if (geometry.type === "Polygon") {
-                // GeoJSON is [lon, lat], we need [lat, lon] for Leaflet
-                return geometry.coordinates.map((ring: number[][]) => 
-                    ring.map((coord: number[]) => [coord[1], coord[0]])
-                );
-            } else if (geometry.type === "MultiPolygon") {
-                // Return first polygon ring for simplicity (largest usually)
-                return geometry.coordinates[0].map((ring: number[][]) => 
-                    ring.map((coord: number[]) => [coord[1], coord[0]])
+            // Fetch from public folder
+            // NOTE: User MUST put 'zones.zip' in the 'public' folder
+            // @ts-ignore
+            const geojson = await window.shp('/zones.zip');
+            
+            // shpjs returns either a FeatureCollection or an array of them
+            if (Array.isArray(geojson)) {
+                 cachedFeatures = geojson.flatMap(g => g.features);
+            } else {
+                 cachedFeatures = geojson.features;
+            }
+        }
+        
+        if (!cachedFeatures) return [];
+
+        // 2. Find feature matching the adminCode
+        // BaroAPI code is 10 digits (e.g., 1168058000). 
+        // Shapefile attributes usually have 'ADM_DR_CD' which is 8 digits (e.g., 11680580).
+        // We match the first 8 digits.
+        const targetCode8 = adminCode.substring(0, 8);
+        
+        const feature = cachedFeatures.find((f: any) => {
+            const props = f.properties || {};
+            // Check common field names for Admin Dong Code
+            const fileCode = String(props.ADM_DR_CD || props.adm_dr_cd || props.adm_cd || props.ADM_CD || "");
+            return fileCode === adminCode || fileCode === targetCode8 || fileCode.startsWith(targetCode8);
+        });
+
+        if (feature && feature.geometry) {
+            let coords: any[] = [];
+            
+            if (feature.geometry.type === "Polygon") {
+                coords = feature.geometry.coordinates;
+            } else if (feature.geometry.type === "MultiPolygon") {
+                // Use the largest polygon or the first one
+                coords = feature.geometry.coordinates[0];
+            }
+
+            // 3. Flip coordinates: GeoJSON is [lon, lat], Leaflet needs [lat, lon]
+            if (coords.length > 0) {
+                 return coords.map((ring: number[][]) => 
+                    ring.map((c: number[]) => [c[1], c[0]])
                 );
             }
         }
     } catch (e) {
-        console.warn("Failed to fetch admin polygon", e);
+        console.warn("Failed to load/parse local shapefile:", e);
     }
     return [];
 };
