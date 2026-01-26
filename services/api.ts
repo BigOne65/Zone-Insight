@@ -246,15 +246,22 @@ export const searchAdminDistrict = async (addressStr: string): Promise<Zone[]> =
             // 4. Fetch All Adongs in this Sigungu
             const dongs = await fetchBaroApi('dong', 'admi', `&signguCd=${targetSigungu.signguCd}`);
             
-            // Filter by dongName if provided
+            // 5. Intelligent Filtering
+            // If dongName is provided, try to filter.
+            // Crucial Fix: If filtering results in 0 items (e.g. because input was a road name like 'Teheran-ro'),
+            // fallback to showing ALL dongs in the Sigungu so user can pick one.
             let filteredDongs = dongs;
             if (dongName) {
-                filteredDongs = dongs.filter((d: any) => d.adongNm.includes(dongName));
+                const matches = dongs.filter((d: any) => d.adongNm.includes(dongName));
+                if (matches.length > 0) {
+                    filteredDongs = matches;
+                }
+                // If matches.length === 0, we intentionally keep filteredDongs as ALL dongs.
             }
 
             // Map to Zone interface
             adminZones = filteredDongs.map((d: any) => ({
-                trarNo: d.adongCd, // Use AdongCd as ID
+                trarNo: d.adongCd, // Use AdongCd as pseudo-trarNo
                 mainTrarNm: `${targetSido.ctprvnNm} ${targetSigungu.signguNm} ${d.adongNm}`,
                 ctprvnNm: targetSido.ctprvnNm,
                 signguNm: targetSigungu.signguNm,
@@ -266,9 +273,6 @@ export const searchAdminDistrict = async (addressStr: string): Promise<Zone[]> =
             }));
         }
     } else {
-        // If only Sido is provided, maybe return list of Sigungus?
-        // But storeListInDong usually works best with Adong or Sigungu.
-        // For now, if no Sigungu, we might error or just return Sido level (Op #8 supports ctprvnCd but data is huge)
         throw new Error("시군구 단위까지 입력해주세요. (예: 서울 강남구)");
     }
 

@@ -123,14 +123,14 @@ const App: React.FC = () => {
           }));
           setFoundZones(enhancedZones);
       } else {
-          setLoadingMsg("해당 주소의 행정구역 내 상권을 조회하고 있습니다...");
+          setLoadingMsg("해당 주소의 행정구역(동) 정보를 조회하고 있습니다...");
           const zones = await searchAdminDistrict(resolvedAddress);
           const enhancedZones = zones.map(z => ({
               ...z,
               searchLat: searchCoords.lat, // Use geocoded center as default map center
               searchLon: searchCoords.lon,
-              parsedPolygon: parseWKT(z.coords), // Op #4 returns WKT
-              type: 'admin' as const // Treat as admin zones
+              parsedPolygon: [], // Admin zones don't have polygons from this API
+              type: 'admin' as const
           }));
           setFoundZones(enhancedZones);
       }
@@ -154,6 +154,7 @@ const App: React.FC = () => {
       let stores: Store[] = [];
       let stdrYm = "";
 
+      // Branch logic based on zone type
       if (selectedZone.type === 'admin' && selectedZone.adminCode && selectedZone.adminLevel) {
           // 행정구역 기준 분석 (storeListInDong)
           const result = await fetchStoresInAdmin(selectedZone.adminCode, selectedZone.adminLevel, (msg) => setLoadingMsg(msg));
