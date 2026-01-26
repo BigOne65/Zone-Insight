@@ -3,7 +3,7 @@ import { PieChart, Pie, Cell, BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveCo
 import * as Icons from './components/Icons';
 import TradeMap from './components/Map';
 import GoogleAd from './components/GoogleAd'; // Import Ad Component
-import { searchAddress, searchZones, fetchStores, searchAdminDistrict, fetchStoresInAdmin } from './services/api';
+import { searchAddress, searchZones, fetchStores, searchAdminDistrict } from './services/api';
 import { Zone, Store, StoreStats } from './types';
 
 // Constants
@@ -123,14 +123,14 @@ const App: React.FC = () => {
           }));
           setFoundZones(enhancedZones);
       } else {
-          setLoadingMsg("해당 주소의 행정구역 정보를 조회하고 있습니다...");
-          // 행정구역 조회는 좌표보다는 주소 텍스트 기반 매칭이 정확함 (API 특성상)
+          setLoadingMsg("해당 주소의 행정구역 내 상권을 조회하고 있습니다...");
           const zones = await searchAdminDistrict(resolvedAddress);
           const enhancedZones = zones.map(z => ({
               ...z,
-              searchLat: searchCoords.lat,
+              searchLat: searchCoords.lat, // Use geocoded center as default map center
               searchLon: searchCoords.lon,
-              type: 'admin' as const
+              parsedPolygon: parseWKT(z.coords), // Op #4 returns WKT
+              type: 'trade' as const // Treat as trade zones
           }));
           setFoundZones(enhancedZones);
       }
@@ -151,20 +151,8 @@ const App: React.FC = () => {
     setDetailedAnalysisFilter(null);
 
     try {
-      let stores: Store[] = [];
-      let stdrYm = "";
-
-      if (selectedZone.type === 'admin' && selectedZone.adminCode && selectedZone.adminLevel) {
-          // 행정구역 기준 분석
-          const result = await fetchStoresInAdmin(selectedZone.adminCode, selectedZone.adminLevel, (msg) => setLoadingMsg(msg));
-          stores = result.stores;
-          stdrYm = result.stdrYm;
-      } else {
-          // 주요상권 기준 분석 (기존)
-          const result = await fetchStores(selectedZone.trarNo, (msg) => setLoadingMsg(msg));
-          stores = result.stores;
-          stdrYm = result.stdrYm;
-      }
+      // Both Trade and Admin search now return valid Trade Zones with 'trarNo'
+      const { stores, stdrYm } = await fetchStores(selectedZone.trarNo, (msg) => setLoadingMsg(msg));
       
       // Date Fallback Logic
       const rawDate = stdrYm || stores[0]?.stdrYm || selectedZone.stdrYm || "";
@@ -400,10 +388,65 @@ const App: React.FC = () => {
                     공개된 상권 데이터를 기반으로, 
                     특정 지역(주소) 주변의 <strong>점포 현황, 업종 분포, 프랜차이즈 비율</strong> 등을 
                     분석하여 제공하는 무료 웹 서비스입니다. 
-                    {searchType === 'trade' ? '상가 밀집 구역(주요 상권)을 중심으로' : '행정동(법정동) 단위의 구역을 기준으로'} 데이터를 분석합니다.
+                    {searchType === 'trade' ? '상가 밀집 구역(주요 상권)을 중심으로' : '행정 구역 내의 주요 상권을 기준으로'} 데이터를 분석합니다.
                 </p>
             </section>
-            {/* ... rest of the static content ... */}
+            
+            <section className="bg-white p-6 rounded-xl border border-gray-100 shadow-sm">
+                <h3 className="text-xl font-bold text-gray-800 mb-3 flex items-center gap-2">
+                    <span className="bg-green-100 text-green-600 p-1.5 rounded-lg"><Icons.List className="w-5 h-5"/></span>
+                    이용 방법
+                </h3>
+                <ul className="space-y-3 text-gray-600">
+                    <li className="flex gap-3">
+                        <span className="flex-shrink-0 w-6 h-6 bg-gray-200 rounded-full flex items-center justify-center font-bold text-xs text-gray-700">1</span>
+                        <span>분석 기준(주요 상권/행정 구역)을 선택하고, 주소를 입력하여 검색합니다.</span>
+                    </li>
+                    <li className="flex gap-3">
+                        <span className="flex-shrink-0 w-6 h-6 bg-gray-200 rounded-full flex items-center justify-center font-bold text-xs text-gray-700">2</span>
+                        <span>지도에서 검색된 위치가 맞는지 확인하고, '분석하기' 버튼을 클릭합니다.</span>
+                    </li>
+                    <li className="flex gap-3">
+                        <span className="flex-shrink-0 w-6 h-6 bg-gray-200 rounded-full flex items-center justify-center font-bold text-xs text-gray-700">3</span>
+                        <span>검색된 상권 목록 중 원하는 곳을 선택하여 상세 리포트를 확인합니다.</span>
+                    </li>
+                </ul>
+            </section>
+
+            <section className="bg-white p-6 rounded-xl border border-gray-100 shadow-sm">
+                 <h3 className="text-xl font-bold text-gray-800 mb-3 flex items-center gap-2">
+                    <span className="bg-orange-100 text-orange-600 p-1.5 rounded-lg"><Icons.TrendingUp className="w-5 h-5"/></span>
+                    제공하는 주요 데이터
+                </h3>
+                <div className="bg-gray-50 border border-gray-200 rounded-xl p-4">
+                    <ul className="grid grid-cols-1 md:grid-cols-2 gap-4 text-sm text-gray-700">
+                        <li className="flex items-start gap-2">
+                            <Icons.PieChartIcon className="w-4 h-4 text-blue-500 mt-0.5"/>
+                            <span><strong>업종별 구성비:</strong> 대분류(음식, 소매 등) 및 중분류별 점포 수와 비율 차트</span>
+                        </li>
+                        <li className="flex items-start gap-2">
+                            <Icons.Store className="w-4 h-4 text-green-500 mt-0.5"/>
+                            <span><strong>프랜차이즈 분석:</strong> 전체 점포 중 프랜차이즈 가맹점 비율 추정치</span>
+                        </li>
+                        <li className="flex items-start gap-2">
+                            <Icons.Layers className="w-4 h-4 text-orange-500 mt-0.5"/>
+                            <span><strong>1층 점포 비율:</strong> 유동인구 접근성이 좋은 1층 점포의 비중 분석</span>
+                        </li>
+                        <li className="flex items-start gap-2">
+                            <Icons.Building className="w-4 h-4 text-indigo-500 mt-0.5"/>
+                            <span><strong>상가 밀집 건물:</strong> 해당 상권 내 점포가 가장 많이 입점한 주요 건물 Top 5</span>
+                        </li>
+                    </ul>
+                </div>
+            </section>
+
+            <section className="bg-gray-50 p-4 rounded-xl border border-gray-100">
+                <p className="text-xs text-gray-500 leading-relaxed text-center">
+                    * 본 서비스는 API로 데이터를 호출하여 보여줍니다. <br/>
+                    * 데이터 갱신 시점에 따라 실제 현황과 일부 차이가 있을 수 있습니다.<br/>
+                    * 주소 검색은 국토교통부 V-World API를 활용합니다.
+                </p>
+            </section>
         </div>
         </>
       )}
@@ -429,7 +472,7 @@ const App: React.FC = () => {
          <div className="bg-white rounded-xl shadow-lg p-4 md:p-6 mb-8 border border-blue-100 animate-fade-in">
             <h3 className="text-lg font-bold text-gray-800 mb-4 flex items-center gap-2">
                 <Icons.List className="text-blue-500"/> 
-                {searchType === 'trade' ? `주변 상권 선택 (${foundZones.length}개)` : '분석 대상 행정구역'}
+                {searchType === 'trade' ? `주변 상권 선택 (${foundZones.length}개)` : '분석 대상 상권 선택'}
             </h3>
             <div className="grid grid-cols-1 gap-4">
                 {foundZones.map((z, i) => (
@@ -438,7 +481,7 @@ const App: React.FC = () => {
                             <div>
                                 <div className="flex items-center gap-2 mb-1">
                                     <span className={`text-xs px-2 py-1 rounded font-medium ${searchType === 'trade' ? 'bg-blue-100 text-blue-700' : 'bg-green-100 text-green-700'}`}>
-                                        {searchType === 'trade' ? `상권번호 ${z.trarNo}` : '행정구역'}
+                                        상권번호 {z.trarNo}
                                     </span>
                                     <h4 className="font-bold text-gray-800 text-lg">{z.mainTrarNm}</h4>
                                 </div>
@@ -459,7 +502,7 @@ const App: React.FC = () => {
                                      </div>
                                  )}
                                  <button onClick={(e) => { e.stopPropagation(); handleAnalyzeZone(z); }} className={`w-full text-white px-6 py-3 rounded-lg font-bold hover:opacity-90 transition flex items-center justify-center gap-2 ${searchType === 'trade' ? 'bg-blue-600' : 'bg-green-600'}`}>
-                                    이 {searchType === 'trade' ? '상권' : '구역'} 분석 시작 <Icons.ArrowRight className="w-4 h-4"/>
+                                    이 {searchType === 'trade' ? '상권' : '상권'} 분석 시작 <Icons.ArrowRight className="w-4 h-4"/>
                                  </button>
                             </div>
                         )}

@@ -203,7 +203,7 @@ export const fetchStores = async (zoneNo: string, onProgress: (msg: string) => v
     return { stores: allStores, stdrYm };
 };
 
-// --- Administrative District Analysis (Op #19 baroApi & Op #8 storeListInDong) ---
+// --- Administrative District Analysis (Op #19 baroApi & Op #4 storeZoneInAdmi) ---
 
 const fetchBaroApi = async (resId: string, catId: string, extraParams: string = "") => {
     const url = `${BASE_URL}/baroApi?resId=${resId}&catId=${catId}&type=json&serviceKey=${DATA_API_KEY}${extraParams}`;
@@ -219,8 +219,9 @@ const fetchBaroApi = async (resId: string, catId: string, extraParams: string = 
 };
 
 export const searchAdminDistrict = async (addressStr: string): Promise<Zone[]> => {
-    // 1. Parse Address using rudimentary logic or V-World response structure
-    // Expect format like: "서울특별시 강남구 역삼동..."
+    if (!DATA_API_KEY) throw new Error("API Key Missing");
+
+    // 1. Parse Address
     const parts = addressStr.split(" ");
     const sidoName = parts[0];
     const sigunguName = parts[1];
@@ -228,106 +229,63 @@ export const searchAdminDistrict = async (addressStr: string): Promise<Zone[]> =
 
     if (!sidoName) throw new Error("주소 형식을 확인할 수 없습니다.");
 
-    // 2. Find Sido Code (baroApi Op #19-1)
+    // 2. Resolve Admin Code (baroApi)
     const sidos = await fetchBaroApi('dong', 'mega');
     const targetSido = sidos.find((s: any) => s.ctprvnNm.includes(sidoName) || sidoName.includes(s.ctprvnNm));
     
     if (!targetSido) throw new Error(`행정구역(시도)을 찾을 수 없습니다: ${sidoName}`);
-    const ctprvnCd = targetSido.ctprvnCd;
+    
+    let divId = 'ctprvnCd';
+    let key = targetSido.ctprvnCd;
 
-    let targetZone: Zone = {
-        trarNo: ctprvnCd, // Temporary ID
-        mainTrarNm: targetSido.ctprvnNm,
-        ctprvnNm: targetSido.ctprvnNm,
-        signguNm: "",
-        trarArea: "0",
-        coords: "", // No polygon for admin district in this API
-        type: 'admin',
-        adminCode: ctprvnCd,
-        adminLevel: 'ctprvnCd' // default
-    };
-
-    // 3. Find Sigungu Code (baroApi Op #19-2)
     if (sigunguName) {
-        const sigungus = await fetchBaroApi('dong', 'cty', `&ctprvnCd=${ctprvnCd}`);
+        const sigungus = await fetchBaroApi('dong', 'cty', `&ctprvnCd=${targetSido.ctprvnCd}`);
         const targetSigungu = sigungus.find((s: any) => s.signguNm.includes(sigunguName));
         
         if (targetSigungu) {
-            targetZone.mainTrarNm = `${targetSido.ctprvnNm} ${targetSigungu.signguNm}`;
-            targetZone.signguNm = targetSigungu.signguNm;
-            targetZone.adminCode = targetSigungu.signguCd;
-            targetZone.adminLevel = 'signguCd';
+            divId = 'signguCd';
+            key = targetSigungu.signguCd;
 
-            // 4. Find Dong Code (baroApi Op #19-3)
-            // Only search Dong if Sigungu was found
             if (dongName) {
                 const dongs = await fetchBaroApi('dong', 'admi', `&signguCd=${targetSigungu.signguCd}`);
-                // Simple matching for Dong name
                 const targetDong = dongs.find((d: any) => d.adongNm.includes(dongName));
-                
                 if (targetDong) {
-                    targetZone.mainTrarNm = `${targetSido.ctprvnNm} ${targetSigungu.signguNm} ${targetDong.adongNm}`;
-                    targetZone.adminCode = targetDong.adongCd;
-                    targetZone.adminLevel = 'adongCd';
+                    divId = 'adongCd';
+                    key = targetDong.adongCd;
                 }
             }
         }
     }
 
-    return [targetZone];
-};
-
-// Op #8 storeListInDong
-export const fetchStoresInAdmin = async (adminCode: string, divId: string, onProgress: (msg: string) => void): Promise<{ stores: Store[], stdrYm: string }> => {
-    if (!DATA_API_KEY) throw new Error("API Key Missing");
-
-    // divId must be one of: ctprvnCd, signguCd, adongCd
-    const PAGE_SIZE = 500;
-    let allStores: Store[] = [];
-    let totalCount = 0;
-    let stdrYm = "";
-
-    const firstUrl = `${BASE_URL}/storeListInDong?divId=${divId}&key=${adminCode}&numOfRows=${PAGE_SIZE}&pageNo=1&serviceKey=${DATA_API_KEY}&type=json`;
-    const firstText = await fetchWithRetry(firstUrl);
-
+    // 3. Find Trade Zones in this Admin District (Op #4 storeZoneInAdmi)
+    // Note: Op #4 returns list of zones in the district.
+    const url = `${BASE_URL}/storeZoneInAdmi?divId=${divId}&key=${key}&serviceKey=${DATA_API_KEY}&type=json`;
+    const text = await fetchWithRetry(url);
+    
+    let zones: Zone[] = [];
     try {
-        const listJson = JSON.parse(firstText);
-        if (listJson.header && listJson.header.stdrYm) stdrYm = String(listJson.header.stdrYm);
-        else if (listJson.response && listJson.response.header && listJson.response.header.stdrYm) stdrYm = String(listJson.response.header.stdrYm);
-
+        const json = JSON.parse(text);
         let items = null;
-        if (listJson.body && listJson.body.items) items = listJson.body.items;
-        else if (listJson.response && listJson.response.body && listJson.response.body.items) items = listJson.response.body.items;
+        if (json.body && json.body.items) items = json.body.items;
+        else if (json.response && json.response.body && json.response.body.items) items = json.response.body.items;
 
         if (items) {
-            allStores = Array.isArray(items) ? items : [items];
-            if (listJson.body && listJson.body.totalCount) totalCount = listJson.body.totalCount;
-            else if (listJson.response && listJson.response.body && listJson.response.body.totalCount) totalCount = listJson.response.body.totalCount;
-            else totalCount = allStores.length;
+            const list = Array.isArray(items) ? items : [items];
+            zones = list.map((item: any) => ({
+                trarNo: item.trarNo,
+                mainTrarNm: item.mainTrarNm,
+                trarArea: item.trarArea,
+                ctprvnNm: item.ctprvnNm,
+                signguNm: item.signguNm,
+                coords: item.coords, // WKT string
+                stdrDt: item.stdrDt,
+                type: 'trade' // Found zones are regular trade zones
+            }));
         }
     } catch (e) {
-        console.warn("JSON Parse failed for admin stores");
+        // XML fallback omitted for brevity, expecting JSON
     }
 
-    // Pagination (Limit to 5 pages for admin query as data can be huge)
-    const totalPages = Math.ceil(totalCount / PAGE_SIZE);
-    const MAX_PAGES = 5; 
-    const loopLimit = Math.min(totalPages, MAX_PAGES);
-
-    if (loopLimit > 1) {
-        for (let i = 2; i <= loopLimit; i++) {
-            const nextUrl = `${BASE_URL}/storeListInDong?divId=${divId}&key=${adminCode}&numOfRows=${PAGE_SIZE}&pageNo=${i}&serviceKey=${DATA_API_KEY}&type=json`;
-            try {
-                const nextText = await fetchWithRetry(nextUrl);
-                const nextJson = JSON.parse(nextText);
-                if (nextJson.body && nextJson.body.items) {
-                    allStores = [...allStores, ...nextJson.body.items];
-                }
-            } catch (e) {}
-            onProgress(`${i} / ${loopLimit} 페이지 수집 중... (행정구역 데이터)`);
-            await new Promise(r => setTimeout(r, 200)); // Safer rate limit
-        }
-    }
-
-    return { stores: allStores, stdrYm };
+    if (zones.length === 0) throw new Error("해당 행정구역 내에 등록된 상권 정보가 없습니다.");
+    return zones;
 };
