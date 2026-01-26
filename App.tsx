@@ -124,7 +124,8 @@ const App: React.FC = () => {
           setFoundZones(enhancedZones);
       } else {
           setLoadingMsg("해당 주소의 행정구역(동) 정보를 조회하고 있습니다...");
-          const zones = await searchAdminDistrict(resolvedAddress);
+          const addrParts = resolvedAddress.split(" ");
+          const zones = await searchAdminDistrict(addrParts[0] || "", addrParts[1] || "", addrParts.slice(2).join(" ") || "");
           const enhancedZones = zones.map(z => ({
               ...z,
               searchLat: searchCoords.lat, // Use geocoded center as default map center
