@@ -254,7 +254,7 @@ export const fetchLocalAdminPolygon = async (zone: Zone): Promise<number[][][]> 
                 return [];
             }
             
-            console.log("[Shapefile] 로컬 Shapefile 직접 로딩 중 (Manual Fetch)...");
+            console.log("[Shapefile] 로컬 Shapefile 직접 로딩 및 검증 중...");
             
             // 1. 직접 fetch를 수행하여 ArrayBuffer를 가져옵니다.
             const [shpRes, dbfRes] = await Promise.all([
@@ -264,21 +264,41 @@ export const fetchLocalAdminPolygon = async (zone: Zone): Promise<number[][][]> 
             
             if (!shpRes.ok || !dbfRes.ok) {
                 console.error(`[Shapefile] 파일을 찾을 수 없습니다. SHP: ${shpRes.status}, DBF: ${dbfRes.status}`);
-                console.warn("중요: 'public/shapefiles/' 폴더 안에 .shp와 .dbf 파일이 압축이 풀린 상태로 존재하는지 확인해주세요.");
+                console.warn("중요: 'public/shapefiles/' 폴더에 파일이 있는지 확인하세요.");
                 return [];
             }
 
             const shpBuf = await shpRes.arrayBuffer();
             const dbfBuf = await dbfRes.arrayBuffer();
             
-            // 2. 바이너리 데이터를 파싱합니다.
-            // @ts-ignore
-            const geometries = window.shp.parseShp(shpBuf); // Returns array of geometries
-            // @ts-ignore
-            const properties = window.shp.parseDbf(dbfBuf); // Returns array of property objects
+            // 2. 데이터 유효성 검사 (Magic Number 체크)
+            // Shapefile(.shp)의 첫 4바이트는 9994 (Big Endian) 여야 합니다.
+            // 만약 HTML(404 Page)이 반환되었다면 9994가 아닐 것입니다.
+            const view = new DataView(shpBuf);
+            // File Code: 0x0000270A (9994 in decimal)
+            const fileCode = view.getInt32(0, false); 
             
-            // 3. 수동으로 GeoJSON FeatureCollection 생성 (shp.combine 사용 안 함)
-            // shp.combine이 내부 URL 병합 함수와 충돌하여 Invalid URL 오류를 일으키는 문제를 방지합니다.
+            if (fileCode !== 9994) {
+                console.error(`[Shapefile Error] 파일 헤더가 올바르지 않습니다. (File Code: ${fileCode})`);
+                
+                // HTML인지 확인
+                const textDecoder = new TextDecoder('utf-8');
+                const startText = textDecoder.decode(shpBuf.slice(0, 50));
+                if (startText.trim().startsWith('<') || startText.includes('html') || startText.includes('DOCTYPE')) {
+                    console.error("[Shapefile Error] 바이너리 파일 대신 HTML 페이지가 반환되었습니다.");
+                    console.error("원인: 'public/shapefiles/BND_ADM_DONG_PG_simple.shp' 경로에 실제 파일이 없어서 404 페이지가 다운로드 되었습니다.");
+                    console.warn("해결책: 프로젝트의 public 폴더에 shapefiles 폴더를 만들고 파일을 넣어주세요.");
+                }
+                return [];
+            }
+
+            // 3. 바이너리 데이터를 파싱합니다.
+            // @ts-ignore
+            const geometries = window.shp.parseShp(shpBuf);
+            // @ts-ignore
+            const properties = window.shp.parseDbf(dbfBuf); 
+            
+            // 4. 수동으로 GeoJSON FeatureCollection 생성
             if (geometries && properties && geometries.length === properties.length) {
                 const features = geometries.map((geo: any, i: number) => ({
                     type: "Feature",
@@ -286,9 +306,8 @@ export const fetchLocalAdminPolygon = async (zone: Zone): Promise<number[][][]> 
                     properties: properties[i] || {}
                 }));
                 cachedFeatures = features;
-                console.log(`[Shapefile] 성공적으로 로드됨 (수동 병합): ${cachedFeatures?.length}개 행정구역`);
+                console.log(`[Shapefile] 성공적으로 로드됨: ${cachedFeatures?.length}개 행정구역`);
             } else if (geometries) {
-                // DBF가 없거나 길이가 안맞는 경우 Geometry만이라도 사용
                 cachedFeatures = geometries.map((geo: any) => ({
                     type: "Feature",
                     geometry: geo,
