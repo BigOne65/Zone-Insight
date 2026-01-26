@@ -349,7 +349,7 @@ const App: React.FC = () => {
       {/* 1. Input */}
       {step === 'input' && (
         <>
-        <div className="bg-white rounded-2xl shadow-lg p-4 md:p-8 max-w-2xl mx-auto mt-6 md:mt-20 text-center animate-fade-in">
+        <div className="bg-white rounded-2xl shadow-lg p-4 md:p-8 max-w-4xl mx-auto mt-6 md:mt-20 text-center animate-fade-in">
            <h2 className="text-lg md:text-xl font-bold mb-4 md:mb-6">분석할 지역의 주소를 입력해주세요</h2>
            <div className="flex flex-col gap-2 mb-4">
               <div className="flex flex-col md:flex-row gap-2">
