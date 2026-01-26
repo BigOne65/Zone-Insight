@@ -68,6 +68,7 @@ const App: React.FC = () => {
   
   // Search Settings
   const [searchType, setSearchType] = useState<'trade' | 'admin'>('trade'); // 'trade' = 주요상권, 'admin' = 행정구역
+  const [adminInfo, setAdminInfo] = useState<{sido: string, sigungu: string, dong: string} | null>(null);
 
   const [searchCoords, setSearchCoords] = useState<{lat: number, lon: number}>({ lat: 37.5665, lon: 126.9780 });
   const [resolvedAddress, setResolvedAddress] = useState("");
@@ -100,6 +101,29 @@ const App: React.FC = () => {
       const lon = parseFloat(item.point.x);
       setSearchCoords({ lat, lon });
       setResolvedAddress(item.address?.road || item.address?.parcel || item.title);
+      
+      // Parse Admin Info from V-World result
+      let sido = "", sigungu = "", dong = "";
+      if (item.address?.structure) {
+          sido = item.address.structure.level1 || "";
+          sigungu = item.address.structure.level2 || "";
+          dong = item.address.structure.level3 || "";
+      } 
+      // Fallback: Parse parcel address (Jibun)
+      if ((!sido || !sigungu) && item.address?.parcel) {
+          const parts = item.address.parcel.split(" ");
+          if (parts.length >= 1) sido = parts[0];
+          if (parts.length >= 2) sigungu = parts[1];
+          if (parts.length >= 3) dong = parts[2];
+      }
+      // Fallback: Parse road address
+      if ((!sido || !sigungu) && item.address?.road) {
+          const parts = item.address.road.split(" ");
+          if (parts.length >= 1) sido = parts[0];
+          if (parts.length >= 2) sigungu = parts[1];
+      }
+      
+      setAdminInfo({ sido, sigungu, dong });
       setStep('verify_location');
     } catch (err: any) {
       setError(err.message);
@@ -124,7 +148,10 @@ const App: React.FC = () => {
           setFoundZones(enhancedZones);
       } else {
           setLoadingMsg("해당 주소의 행정구역(동) 정보를 조회하고 있습니다...");
-          const zones = await searchAdminDistrict(resolvedAddress);
+          if (!adminInfo || !adminInfo.sido || !adminInfo.sigungu) {
+              throw new Error("행정구역 정보(시/군/구)를 정확히 파악하지 못했습니다. 주소를 더 상세히 입력해주세요.");
+          }
+          const zones = await searchAdminDistrict(adminInfo.sido, adminInfo.sigungu, adminInfo.dong);
           const enhancedZones = zones.map(z => ({
               ...z,
               searchLat: searchCoords.lat, // Use geocoded center as default map center

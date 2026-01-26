@@ -175,26 +175,45 @@ const fetchBaroApi = async (resId: string, catId: string, extraParams: string = 
     } catch (e) { return []; }
 };
 
-export const searchAdminDistrict = async (addressStr: string): Promise<Zone[]> => {
+export const searchAdminDistrict = async (sido: string, sigungu: string, dong: string): Promise<Zone[]> => {
     if (!DATA_API_KEY) throw new Error("API Key Missing");
-    const parts = addressStr.split(" ");
-    const sidoName = parts[0];
-    const sigunguName = parts[1];
-    const dongName = parts.length > 2 ? parts[2] : "";
+    
+    // Validate inputs
+    if (!sido) throw new Error("시/도 정보를 찾을 수 없습니다. (예: 서울특별시, 경기도)");
 
-    if (!sidoName) throw new Error("주소 형식을 확인할 수 없습니다.");
+    // 1. Resolve Sido Code
     const sidos = await fetchBaroApi('dong', 'mega');
-    const targetSido = sidos.find((s: any) => s.ctprvnNm.includes(sidoName) || sidoName.includes(s.ctprvnNm));
-    if (!targetSido) throw new Error(`행정구역(시도)을 찾을 수 없습니다: ${sidoName}`);
+    const targetSido = sidos.find((s: any) => s.ctprvnNm.includes(sido) || sido.includes(s.ctprvnNm));
+    
+    if (!targetSido) throw new Error(`행정구역(시도)을 찾을 수 없습니다: ${sido}`);
     
     let adminZones: Zone[] = [];
-    if (sigunguName) {
+
+    // 2. Resolve Sigungu Code
+    if (sigungu) {
         const sigungus = await fetchBaroApi('dong', 'cty', `&ctprvnCd=${targetSido.ctprvnCd}`);
-        const targetSigungu = sigungus.find((s: any) => s.signguNm.includes(sigunguName));
+        const targetSigungu = sigungus.find((s: any) => s.signguNm.includes(sigungu) || sigungu.includes(s.signguNm));
+        
         if (targetSigungu) {
+            // 3. Fetch All Adongs in this Sigungu
             const dongs = await fetchBaroApi('dong', 'admi', `&signguCd=${targetSigungu.signguCd}`);
+            
+            // 4. Intelligent Filtering
             let filteredDongs = dongs;
-            if (dongName) filteredDongs = dongs.filter((d: any) => d.adongNm.includes(dongName));
+            
+            // If Dong is provided, try to filter. 
+            // If filter results in empty list (e.g. mismatch like "1동" vs "제1동"), return ALL dongs in sigungu.
+            if (dong) {
+                const matches = dongs.filter((d: any) => d.adongNm.includes(dong) || dong.includes(d.adongNm));
+                if (matches.length > 0) {
+                    filteredDongs = matches;
+                } else {
+                    console.log(`No specific match for dong: ${dong}. Showing all dongs in ${targetSigungu.signguNm}.`);
+                    // filteredDongs remains as all dongs
+                }
+            }
+
+            // Map to Zone interface
             adminZones = filteredDongs.map((d: any) => ({
                 trarNo: d.adongCd,
                 mainTrarNm: `${targetSido.ctprvnNm} ${targetSigungu.signguNm} ${d.adongNm}`,
@@ -203,11 +222,15 @@ export const searchAdminDistrict = async (addressStr: string): Promise<Zone[]> =
                 trarArea: "0",
                 coords: "",
                 type: 'admin',
-                adminCode: d.adongCd, // 10-digit MOIS code
+                adminCode: d.adongCd,
                 adminLevel: 'adongCd'
             }));
+        } else {
+             throw new Error(`행정구역(시군구)을 찾을 수 없습니다: ${sigungu}`);
         }
-    } else { throw new Error("시군구 단위까지 입력해주세요."); }
+    } else {
+        throw new Error("시군구 단위까지 정보가 필요합니다. (예: 서울 강남구)");
+    }
 
     if (adminZones.length === 0) throw new Error("해당 조건에 맞는 행정동을 찾을 수 없습니다.");
     return adminZones;
