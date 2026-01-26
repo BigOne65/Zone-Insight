@@ -309,7 +309,7 @@ const App: React.FC = () => {
   };
 
   return (
-    <div className="min-h-screen max-w-6xl mx-auto p-4 md:p-8">
+    <div className="min-h-screen max-w-6xl mx-auto p-3 md:p-8">
       {/* Header */}
       <header className="mb-8 flex flex-col items-center justify-center gap-4 text-center relative">
          <div>
@@ -328,7 +328,7 @@ const App: React.FC = () => {
       {/* 1. Input */}
       {step === 'input' && (
         <>
-        <div className="bg-white rounded-2xl shadow-lg p-4 md:p-8 max-w-2xl mx-auto mt-10 md:mt-20 text-center animate-fade-in">
+        <div className="bg-white rounded-2xl shadow-lg p-4 md:p-8 max-w-2xl mx-auto mt-6 md:mt-20 text-center animate-fade-in">
            <h2 className="text-lg md:text-xl font-bold mb-4 md:mb-6">분석할 지역의 주소를 입력해주세요</h2>
            <div className="flex flex-col gap-2 mb-4">
               <div className="flex flex-col md:flex-row gap-2">
@@ -342,8 +342,8 @@ const App: React.FC = () => {
         </div>
 
         {/* Content for AdSense Approval (Valuable Inventory) */}
-        <div className="max-w-5xl mx-auto mt-12 px-4 animate-fade-in">
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-10">
+        <div className="max-w-5xl mx-auto mt-8 md:mt-12 px-2 md:px-4 animate-fade-in">
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-6 md:gap-10">
                 <div className="space-y-6">
                     <section>
                         <h3 className="text-xl font-bold text-gray-800 mb-3 flex items-center gap-2">
@@ -351,9 +351,9 @@ const App: React.FC = () => {
                             상권 분석 서비스란?
                         </h3>
                         <p className="text-gray-600 leading-relaxed text-sm md:text-base">
-                            공개되어있는 상권 정보를 기반으로, 
+                            공개된 상권 데이터를 기반으로, 
                             특정 지역(주소) 주변의 <strong>점포 현황, 업종 분포, 프랜차이즈 비율</strong> 등을 
-                            심층 분석하여 제공하는 무료 웹 서비스입니다. 
+                            분석하여 제공하는 무료 웹 서비스입니다. 
                             창업을 준비하거나 상권 현황이 궁금한 분들에게 객관적인 데이터를 시각화하여 보여드립니다.
                         </p>
                     </section>
@@ -410,8 +410,8 @@ const App: React.FC = () => {
 
                     <section className="bg-gray-50 p-4 rounded-xl border border-gray-100">
                         <p className="text-xs text-gray-500 leading-relaxed">
-                            * 본 서비스는 API로 정보를 호출하여 데이터를 보여줍니다. <br/>
-                            * 데이터 갱신 시점에 따라 실제 현황과 차이가 있을 수 있습니다.<br/>
+                            * 본 서비스는 API로 데이터를 호출하여 보여줍니다. <br/>
+                            * 데이터 갱신 시점에 따라 실제 현황과 일부 차이가 있을 수 있습니다.<br/>
                             * 주소 검색은 국토교통부 V-World API를 활용합니다.
                         </p>
                     </section>
@@ -427,14 +427,14 @@ const App: React.FC = () => {
 
       {/* 2. Verify Map */}
       {step === 'verify_location' && (
-        <div className="bg-white rounded-xl shadow-lg p-6 mb-8 border border-blue-100 animate-fade-in">
+        <div className="bg-white rounded-xl shadow-lg p-4 md:p-6 mb-8 border border-blue-100 animate-fade-in">
            <h3 className="text-lg font-bold text-gray-800 mb-4 flex items-center gap-2"><Icons.MapPin className="text-blue-500"/> 검색 위치 확인</h3>
            <p className="text-sm text-gray-600 mb-4">위치가 정확한지 확인하고, 필요하면 <strong>마커를 드래그</strong>하여 조정해주세요.</p>
            <div className="h-80 w-full rounded-lg overflow-hidden border border-gray-300 mb-4 relative z-0">
               <TradeMap lat={searchCoords.lat} lon={searchCoords.lon} draggable={true} onDragEnd={(lat, lon) => setSearchCoords({lat, lon})} />
            </div>
            <div className="text-sm text-gray-500 mb-4 bg-gray-50 p-3 rounded">검색 결과: <strong>{resolvedAddress}</strong></div>
-           <button onClick={handleSearchZones} disabled={loading} className="w-full bg-blue-600 text-white px-6 py-4 rounded-lg font-bold hover:bg-blue-700 transition flex items-center justify-center gap-2 shadow-lg">
+           <button onClick={handleSearchZones} disabled={loading} className="w-full bg-blue-600 text-white px-4 py-3 md:px-6 md:py-4 rounded-lg font-bold hover:bg-blue-700 transition flex items-center justify-center gap-2 shadow-lg">
                 {loading ? '상권 찾는 중...' : '📍 이 위치 주변 상권 분석하기'}
            </button>
            {error && <p className="text-red-500 text-sm mt-2 text-center">{error}</p>}
@@ -443,7 +443,7 @@ const App: React.FC = () => {
 
       {/* 3. Zone Select */}
       {step === 'select_zone' && (
-         <div className="bg-white rounded-xl shadow-lg p-6 mb-8 border border-blue-100 animate-fade-in">
+         <div className="bg-white rounded-xl shadow-lg p-4 md:p-6 mb-8 border border-blue-100 animate-fade-in">
             <h3 className="text-lg font-bold text-gray-800 mb-4 flex items-center gap-2"><Icons.List className="text-blue-500"/> 주변 상권 선택 ({foundZones.length}개)</h3>
             <div className="grid grid-cols-1 gap-4">
                 {foundZones.map((z, i) => (
@@ -497,7 +497,7 @@ const App: React.FC = () => {
 
                  {/* Main Card */}
                  <div className="bg-white rounded-xl shadow-lg overflow-hidden">
-                    <div className="bg-gradient-to-r from-blue-500 to-indigo-600 p-6 text-white flex flex-col md:flex-row justify-between items-center">
+                    <div className="bg-gradient-to-r from-blue-500 to-indigo-600 p-4 md:p-6 text-white flex flex-col md:flex-row justify-between items-center">
                        <div>
                           <h2 className="text-3xl font-bold mb-1">{tradeZone.mainTrarNm}</h2>
                           <p className="opacity-90 text-sm flex items-center gap-1"><Icons.MapPin className="w-4 h-4"/> {tradeZone.ctprvnNm} {tradeZone.signguNm}</p>
@@ -524,7 +524,7 @@ const App: React.FC = () => {
 
                  {/* Summary Cards */}
                  <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-                     <div className="bg-white p-6 rounded-xl shadow-sm border">
+                     <div className="bg-white p-4 md:p-6 rounded-xl shadow-sm border">
                          <h3 className="text-lg font-bold text-gray-800 mb-4 flex items-center gap-2"><Icons.Building className="text-indigo-500"/> 상가 밀집 건물 Top 5</h3>
                          <ul className="space-y-2">
                             {storeStats.buildingData.map((b,i) => (
@@ -540,7 +540,7 @@ const App: React.FC = () => {
                             ))}
                          </ul>
                      </div>
-                     <div className="bg-white p-6 rounded-xl shadow-sm border">
+                     <div className="bg-white p-4 md:p-6 rounded-xl shadow-sm border">
                          <h3 className="text-lg font-bold text-gray-800 mb-4 flex items-center gap-2"><Icons.Layers className="text-orange-500"/> 1층 점포 비율</h3>
                          <div className="h-40 w-full relative static-chart">
                             <ResponsiveContainer width="100%" height="100%">
@@ -555,7 +555,7 @@ const App: React.FC = () => {
                             </div>
                          </div>
                      </div>
-                     <div className="bg-white p-6 rounded-xl shadow-sm border flex flex-col justify-center items-center text-center">
+                     <div className="bg-white p-4 md:p-6 rounded-xl shadow-sm border flex flex-col justify-center items-center text-center">
                          <div className="w-full flex items-center gap-2 mb-2 px-2">
                             <Icons.Store className="text-green-500 h-5 w-5 flex-shrink-0" />
                             <h3 className="text-lg font-bold text-gray-800 whitespace-nowrap">프랜차이즈 비율</h3>
@@ -572,7 +572,7 @@ const App: React.FC = () => {
 
                  {/* Charts */}
                  <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                     <div className="bg-white p-6 rounded-xl shadow-sm border clickable-chart">
+                     <div className="bg-white p-4 md:p-6 rounded-xl shadow-sm border clickable-chart">
                          <div className="flex justify-between items-center mb-4 border-l-4 border-blue-500 pl-3">
                             <h3 className="text-lg font-bold text-gray-800">업종별 구성비 (대분류)</h3>
                             <div className="flex bg-gray-100 rounded-lg p-1">
@@ -612,7 +612,7 @@ const App: React.FC = () => {
                          </div>
                      </div>
                      
-                     <div className="bg-white p-6 rounded-xl shadow-sm border clickable-chart">
+                     <div className="bg-white p-4 md:p-6 rounded-xl shadow-sm border clickable-chart">
                          <div className="flex justify-between items-center mb-4 border-l-4 border-green-500 pl-3">
                             <h3 className="text-lg font-bold text-gray-800">{viewModeMid === 'chart' ? '세부 업종 Top 10 (중분류)' : '세부 업종 전체 리스트 (중분류)'}</h3>
                             <div className="flex bg-gray-100 rounded-lg p-1">
@@ -664,7 +664,7 @@ const App: React.FC = () => {
 
                  {/* Comprehensive Analysis Table (New) */}
                  <div className="bg-white rounded-xl shadow-sm border overflow-hidden">
-                    <div className="p-6 border-b bg-gray-50 flex items-center justify-between">
+                    <div className="p-4 md:p-6 border-b bg-gray-50 flex items-center justify-between">
                         <h3 className="text-lg font-bold text-gray-800 flex items-center gap-2">
                             <Icons.TrendingUp className="text-blue-600"/> 
                             {detailedAnalysisFilter ? (
@@ -689,11 +689,11 @@ const App: React.FC = () => {
                         <table className="w-full text-sm text-left whitespace-nowrap">
                             <thead className="bg-gray-100 text-gray-700 font-semibold">
                                 <tr>
-                                    <th className="px-6 py-3">업종 ({detailedAnalysisFilter ? '중분류' : '대분류'})</th>
-                                    <th className="px-6 py-3 text-right">점포수 ({detailedAnalysisFilter ? '그룹 내 비중' : '구성비'})</th>
-                                    {!detailedAnalysisFilter && <th className="px-6 py-3">대표 세부업종</th>}
-                                    <th className="px-6 py-3 text-center">프랜차이즈 비율</th>
-                                    <th className="px-6 py-3 text-center">1층 점포 비율</th>
+                                    <th className="px-3 py-2 md:px-6 md:py-3">업종 ({detailedAnalysisFilter ? '중분류' : '대분류'})</th>
+                                    <th className="px-3 py-2 md:px-6 md:py-3 text-right">점포수 ({detailedAnalysisFilter ? '그룹 내 비중' : '구성비'})</th>
+                                    {!detailedAnalysisFilter && <th className="px-3 py-2 md:px-6 md:py-3">대표 세부업종</th>}
+                                    <th className="px-3 py-2 md:px-6 md:py-3 text-center">프랜차이즈 비율</th>
+                                    <th className="px-3 py-2 md:px-6 md:py-3 text-center">1층 점포 비율</th>
                                 </tr>
                             </thead>
                             <tbody className="divide-y">
@@ -702,16 +702,16 @@ const App: React.FC = () => {
                                         className={`hover:bg-gray-50 transition-colors ${!detailedAnalysisFilter ? 'cursor-pointer group' : ''}`}
                                         onClick={() => !detailedAnalysisFilter && setDetailedAnalysisFilter(item.name)}
                                     >
-                                        <td className="px-6 py-3 font-medium text-gray-900 flex items-center gap-2">
+                                        <td className="px-3 py-2 md:px-6 md:py-3 font-medium text-gray-900 flex items-center gap-2">
                                             {item.name}
                                             {!detailedAnalysisFilter && <Icons.Search className="w-3 h-3 text-gray-300 opacity-0 group-hover:opacity-100 transition-opacity" />}
                                         </td>
-                                        <td className="px-6 py-3 text-right">
+                                        <td className="px-3 py-2 md:px-6 md:py-3 text-right">
                                             <div className="font-bold">{item.count.toLocaleString()}개</div>
                                             <div className="text-xs text-gray-500">({item.ratio.toFixed(1)}%)</div>
                                         </td>
-                                        {!detailedAnalysisFilter && <td className="px-6 py-3 text-gray-600">{item.topMid}</td>}
-                                        <td className="px-6 py-3">
+                                        {!detailedAnalysisFilter && <td className="px-3 py-2 md:px-6 md:py-3 text-gray-600">{item.topMid}</td>}
+                                        <td className="px-3 py-2 md:px-6 md:py-3">
                                             <div className="flex items-center justify-center gap-2">
                                                 <span className="w-12 text-right font-medium text-green-600">{item.franchiseRatio.toFixed(1)}%</span>
                                                 <div className="w-24 h-2 bg-gray-200 rounded-full overflow-hidden">
@@ -719,7 +719,7 @@ const App: React.FC = () => {
                                                 </div>
                                             </div>
                                         </td>
-                                        <td className="px-6 py-3">
+                                        <td className="px-3 py-2 md:px-6 md:py-3">
                                             <div className="flex items-center justify-center gap-2">
                                                 <span className="w-12 text-right font-medium text-orange-600">{item.firstFloorRatio.toFixed(1)}%</span>
                                                 <div className="w-24 h-2 bg-gray-200 rounded-full overflow-hidden">
@@ -736,19 +736,19 @@ const App: React.FC = () => {
 
                  {/* Store List */}
                  <div className="bg-white rounded-xl shadow-sm border overflow-hidden">
-                    <div className="p-6 border-b bg-gray-50"><h3 className="text-lg font-bold text-gray-800">📌 주요 프랜차이즈 및 유명 브랜드 (Top 30)</h3></div>
+                    <div className="p-4 md:p-6 border-b bg-gray-50"><h3 className="text-lg font-bold text-gray-800">📌 주요 프랜차이즈 및 유명 브랜드 (Top 30)</h3></div>
                     <div className="overflow-x-auto max-h-96 custom-scrollbar">
                        <table className="w-full text-left text-sm text-gray-600">
                           <thead className="bg-gray-100 text-gray-700 uppercase font-semibold sticky top-0">
-                             <tr><th className="px-6 py-3">순위</th><th className="px-6 py-3">상호명</th><th className="px-6 py-3">대분류</th><th className="px-6 py-3">중분류</th><th className="px-6 py-3">주소</th></tr>
+                             <tr><th className="px-2 py-2 md:px-6 md:py-3">순위</th><th className="px-2 py-2 md:px-6 md:py-3">상호명</th><th className="px-2 py-2 md:px-6 md:py-3">대분류</th><th className="px-2 py-2 md:px-6 md:py-3">중분류</th><th className="px-2 py-2 md:px-6 md:py-3">주소</th></tr>
                           </thead>
                           <tbody className="divide-y">
                              {topStores.map((s,i) => {
                                 const isMajorStore = MAJOR_BRANDS.some(brand => s.bizesNm.includes(brand));
                                 return (
                                     <tr key={i} className={`hover:bg-gray-50 ${isMajorStore ? 'bg-yellow-50' : ''}`}>
-                                       <td className="px-6 py-3 font-bold text-gray-500">{i + 1}</td>
-                                       <td className="px-6 py-3 font-medium text-gray-900">
+                                       <td className="px-2 py-2 md:px-6 md:py-3 font-bold text-gray-500">{i + 1}</td>
+                                       <td className="px-2 py-2 md:px-6 md:py-3 font-medium text-gray-900">
                                           <div className="flex items-center gap-2">
                                               {isMajorStore && <Icons.Star className="w-4 h-4 text-yellow-500 fill-yellow-500 flex-shrink-0" title="파워 브랜드" />}
                                               <span>{s.bizesNm}</span>
@@ -758,9 +758,9 @@ const App: React.FC = () => {
                                               {["1","1층","지상1층"].includes(s.flrNo) && <span className="text-xs text-orange-600 bg-orange-100 px-1.5 py-0.5 rounded font-medium">1F</span>}
                                           </div>
                                        </td>
-                                       <td className="px-6 py-3"><span className="bg-gray-100 text-gray-800 px-2 py-1 rounded text-xs">{s.indsLclsNm}</span></td>
-                                       <td className="px-6 py-3">{s.indsMclsNm}</td>
-                                       <td className="px-6 py-3 text-gray-500 truncate max-w-xs" title={s.rdnmAdr}>{s.rdnmAdr}</td>
+                                       <td className="px-2 py-2 md:px-6 md:py-3"><span className="bg-gray-100 text-gray-800 px-2 py-1 rounded text-xs">{s.indsLclsNm}</span></td>
+                                       <td className="px-2 py-2 md:px-6 md:py-3">{s.indsMclsNm}</td>
+                                       <td className="px-2 py-2 md:px-6 md:py-3 text-gray-500 truncate max-w-xs" title={s.rdnmAdr}>{s.rdnmAdr}</td>
                                     </tr>
                                 );
                              })}

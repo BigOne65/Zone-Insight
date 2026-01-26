@@ -1,4 +1,4 @@
-import React, { useEffect, useRef } from 'react';
+import React, { useEffect, useRef, useState } from 'react';
 
 interface GoogleAdProps {
   className?: string;
@@ -26,17 +26,48 @@ const GoogleAd: React.FC<GoogleAdProps> = ({
   layout
 }) => {
   const adRef = useRef<HTMLModElement>(null);
+  const [isAdPushed, setIsAdPushed] = useState(false);
 
   useEffect(() => {
-    try {
-      // Check if ad is already loaded in this slot to prevent duplicates in React Strict Mode
-      if (adRef.current && adRef.current.innerHTML === "") {
-        (window.adsbygoogle = window.adsbygoogle || []).push({});
+    // Prevent pushing multiple times for the same component instance
+    if (isAdPushed) return;
+
+    const element = adRef.current;
+    if (!element) return;
+
+    const pushAd = () => {
+      try {
+        // Double check innerHTML to be safe
+        if (element && element.innerHTML === "") {
+          (window.adsbygoogle = window.adsbygoogle || []).push({});
+          setIsAdPushed(true);
+        }
+      } catch (e) {
+        console.error("AdSense error:", e);
       }
-    } catch (e) {
-      console.error("AdSense error:", e);
+    };
+
+    // If element already has width, push immediately
+    if (element.offsetWidth > 0) {
+        pushAd();
+    } else {
+        // Wait for element to have width (layout painted) to avoid "availableWidth=0" error
+        const observer = new ResizeObserver((entries) => {
+            for (const entry of entries) {
+                if (entry.contentRect.width > 0) {
+                    pushAd();
+                    observer.disconnect();
+                }
+            }
+        });
+        
+        observer.observe(element);
+        
+        return () => {
+            observer.disconnect();
+        };
     }
-  }, []);
+  }, [isAdPushed, slot, client]);
 
   return (
     <div className={`google-ad-container my-8 w-full flex justify-center bg-gray-50 rounded-lg overflow-hidden ${className}`}>
