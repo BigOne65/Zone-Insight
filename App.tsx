@@ -3,7 +3,7 @@ import { PieChart, Pie, Cell, BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveCo
 import * as Icons from './components/Icons';
 import TradeMap from './components/Map';
 import GoogleAd from './components/GoogleAd'; // Import Ad Component
-import { searchAddress, searchZones, fetchStores, searchAdminDistrict } from './services/api';
+import { searchAddress, searchZones, fetchStores, searchAdminDistrict, fetchStoresInAdmin } from './services/api';
 import { Zone, Store, StoreStats } from './types';
 
 // Constants
@@ -130,7 +130,7 @@ const App: React.FC = () => {
               searchLat: searchCoords.lat, // Use geocoded center as default map center
               searchLon: searchCoords.lon,
               parsedPolygon: parseWKT(z.coords), // Op #4 returns WKT
-              type: 'trade' as const // Treat as trade zones
+              type: 'admin' as const // Treat as admin zones
           }));
           setFoundZones(enhancedZones);
       }
@@ -151,8 +151,20 @@ const App: React.FC = () => {
     setDetailedAnalysisFilter(null);
 
     try {
-      // Both Trade and Admin search now return valid Trade Zones with 'trarNo'
-      const { stores, stdrYm } = await fetchStores(selectedZone.trarNo, (msg) => setLoadingMsg(msg));
+      let stores: Store[] = [];
+      let stdrYm = "";
+
+      if (selectedZone.type === 'admin' && selectedZone.adminCode && selectedZone.adminLevel) {
+          // 행정구역 기준 분석 (storeListInDong)
+          const result = await fetchStoresInAdmin(selectedZone.adminCode, selectedZone.adminLevel, (msg) => setLoadingMsg(msg));
+          stores = result.stores;
+          stdrYm = result.stdrYm;
+      } else {
+          // 주요상권 기준 분석 (storeListInArea)
+          const result = await fetchStores(selectedZone.trarNo, (msg) => setLoadingMsg(msg));
+          stores = result.stores;
+          stdrYm = result.stdrYm;
+      }
       
       // Date Fallback Logic
       const rawDate = stdrYm || stores[0]?.stdrYm || selectedZone.stdrYm || "";
@@ -472,7 +484,7 @@ const App: React.FC = () => {
          <div className="bg-white rounded-xl shadow-lg p-4 md:p-6 mb-8 border border-blue-100 animate-fade-in">
             <h3 className="text-lg font-bold text-gray-800 mb-4 flex items-center gap-2">
                 <Icons.List className="text-blue-500"/> 
-                {searchType === 'trade' ? `주변 상권 선택 (${foundZones.length}개)` : '분석 대상 상권 선택'}
+                {searchType === 'trade' ? `주변 상권 선택 (${foundZones.length}개)` : '분석 대상 행정구역 선택'}
             </h3>
             <div className="grid grid-cols-1 gap-4">
                 {foundZones.map((z, i) => (
@@ -481,7 +493,7 @@ const App: React.FC = () => {
                             <div>
                                 <div className="flex items-center gap-2 mb-1">
                                     <span className={`text-xs px-2 py-1 rounded font-medium ${searchType === 'trade' ? 'bg-blue-100 text-blue-700' : 'bg-green-100 text-green-700'}`}>
-                                        상권번호 {z.trarNo}
+                                        {searchType === 'trade' ? `상권번호 ${z.trarNo}` : '행정동'}
                                     </span>
                                     <h4 className="font-bold text-gray-800 text-lg">{z.mainTrarNm}</h4>
                                 </div>
@@ -502,7 +514,7 @@ const App: React.FC = () => {
                                      </div>
                                  )}
                                  <button onClick={(e) => { e.stopPropagation(); handleAnalyzeZone(z); }} className={`w-full text-white px-6 py-3 rounded-lg font-bold hover:opacity-90 transition flex items-center justify-center gap-2 ${searchType === 'trade' ? 'bg-blue-600' : 'bg-green-600'}`}>
-                                    이 {searchType === 'trade' ? '상권' : '상권'} 분석 시작 <Icons.ArrowRight className="w-4 h-4"/>
+                                    이 {searchType === 'trade' ? '상권' : '구역'} 분석 시작 <Icons.ArrowRight className="w-4 h-4"/>
                                  </button>
                             </div>
                         )}
