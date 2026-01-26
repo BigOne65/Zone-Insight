@@ -281,11 +281,16 @@ export const searchAdminDistrict = async (addressStr: string): Promise<Zone[]> =
 export const fetchAdminPolygon = async (adminCode: string): Promise<number[][][]> => {
     if (!VWORLD_KEY) return [];
 
-    // V-World LT_C_ADEMD_INFO (Admin Dong) usually uses 8 digit code (Sido 2 + Sigungu 3 + EMD 3)
-    // adminCode from BaroAPI is usually 10 digits.
+    // V-World Data API URL: https://api.vworld.kr/req/data
+    // LT_C_ADSTRD_INFO: 행정동 경계 (Administrative Dong)
+    // LT_C_ADEMD_INFO: 읍면동(법정동) 경계 (Legal Dong)
+    
+    // adminCode from BaroAPI is usually 10 digits (e.g., 1168058000).
+    // V-World matching often works best with 8 digits (Sido 2 + Sig 3 + Dong 3).
     const searchCode = adminCode.length >= 8 ? adminCode.substring(0, 8) : adminCode;
     
-    const url = `${VWORLD_DATA_URL}?service=data&request=GetFeature&data=LT_C_ADEMD_INFO&key=${VWORLD_KEY}&domain=localhost&attrFilter=emd_cd:like:${searchCode}&format=json&geometry=true&size=1`;
+    // Change layer to LT_C_ADSTRD_INFO and attrFilter to adm_dr_cd
+    const url = `${VWORLD_DATA_URL}?service=data&request=GetFeature&data=LT_C_ADSTRD_INFO&key=${VWORLD_KEY}&domain=localhost&attrFilter=adm_dr_cd:like:${searchCode}&format=json&geometry=true&size=1&crs=EPSG:4326`;
     
     try {
         const text = await fetchWithRetry(url);
@@ -296,12 +301,12 @@ export const fetchAdminPolygon = async (adminCode: string): Promise<number[][][]
             const geometry = feature.geometry;
             
             if (geometry.type === "Polygon") {
-                // GeoJSON is [lon, lat], we need [lat, lon]
+                // GeoJSON is [lon, lat], we need [lat, lon] for Leaflet
                 return geometry.coordinates.map((ring: number[][]) => 
                     ring.map((coord: number[]) => [coord[1], coord[0]])
                 );
             } else if (geometry.type === "MultiPolygon") {
-                // Return first polygon ring for simplicity or merge (using first outer ring of first polygon)
+                // Return first polygon ring for simplicity (largest usually)
                 return geometry.coordinates[0].map((ring: number[][]) => 
                     ring.map((coord: number[]) => [coord[1], coord[0]])
                 );
