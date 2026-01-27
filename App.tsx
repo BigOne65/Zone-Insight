@@ -170,7 +170,7 @@ const App: React.FC = () => {
   const handleAnalyzeZone = async (selectedZone: Zone) => {
     setLoading(true); setLoadingMsg("상권 상세 데이터를 분석하고 있습니다..."); setError(null);
     setTradeZone(selectedZone);
-    setStep('result');
+    // Don't set step to result yet. Wait for data.
     setSelectedLarge(null); setSelectedMid(null);
     setSelectedBuildingIndex(null);
     setDetailedAnalysisFilter(null);
@@ -188,6 +188,10 @@ const App: React.FC = () => {
           stores = result.stores;
           stdrYm = result.stdrYm;
       }
+
+      if (!stores || stores.length === 0) {
+        throw new Error("해당 지역의 상권 데이터(점포 정보)가 없습니다.");
+      }
       
       const rawDate = stdrYm || stores[0]?.stdrYm || selectedZone.stdrYm || "";
       const cleanDate = rawDate.replace(/[^0-9]/g, '');
@@ -196,6 +200,7 @@ const App: React.FC = () => {
       setDataDate(fmtDate);
       setAllRawStores(stores);
       analyzeData(stores);
+      setStep('result'); // Set step only after success
     } catch (err: any) {
       setError("상세 데이터 로딩 실패: " + err.message);
     } finally {
@@ -539,6 +544,7 @@ const App: React.FC = () => {
                     </div>
                 ))}
             </div>
+            {error && <p className="text-red-500 text-sm mt-4 text-center bg-red-50 p-2 rounded">{error}</p>}
          </div>
       )}
 
