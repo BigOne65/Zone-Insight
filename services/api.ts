@@ -346,9 +346,22 @@ export const fetchLocalAdminPolygon = async (zone: Zone): Promise<number[][][]> 
             return [];
         }
 
-        const boundUrl = `${SGIS_BASE_URL}/boundary/hadmarea.geojson?accessToken=${token}&adm_cd=${admCd}&low_search=0`;
+        // SGIS API requires 'year' parameter (2000~2025)
+        // Automatically use current year (e.g. 2025)
+        const currentYear = new Date().getFullYear().toString();
+        let boundUrl = `${SGIS_BASE_URL}/boundary/hadmarea.geojson?accessToken=${token}&adm_cd=${admCd}&year=${currentYear}&low_search=0`;
+        
         let boundResStr = await fetchWithRetry(boundUrl);
-        const boundData = JSON.parse(boundResStr);
+        let boundData = JSON.parse(boundResStr);
+
+        // Fallback: If current year data is missing, try previous year
+        if (!boundData.features || boundData.features.length === 0) {
+             const prevYear = (new Date().getFullYear() - 1).toString();
+             console.warn(`[SGIS] ${currentYear}년도 데이터 없음, ${prevYear}년도로 재시도`);
+             boundUrl = `${SGIS_BASE_URL}/boundary/hadmarea.geojson?accessToken=${token}&adm_cd=${admCd}&year=${prevYear}&low_search=0`;
+             boundResStr = await fetchWithRetry(boundUrl);
+             boundData = JSON.parse(boundResStr);
+        }
 
         if (boundData.features && boundData.features.length > 0) {
             const geometry = boundData.features[0].geometry;
