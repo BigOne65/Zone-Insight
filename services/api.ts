@@ -32,6 +32,8 @@ const VWORLD_BASE_URL = "https://api.vworld.kr/req/search";
 // Update Base URL to mods.go.kr
 const SGIS_BASE_URL = "https://sgisapi.mods.go.kr/OpenAPI3";
 
+const PAGE_SIZE = 1000;
+
 // --- Cache ---
 const polygonCache = new Map<string, number[][][]>();
 
@@ -209,8 +211,7 @@ export const searchZones = async (lat: number, lon: number): Promise<Zone[]> => 
 
 export const fetchStores = async (zoneNo: string, onProgress: (msg: string) => void): Promise<{ stores: Store[], stdrYm: string }> => {
     if (!DATA_API_KEY) throw new Error("API Key Missing");
-    // 요청당 데이터 수 1000개로 상향
-    const PAGE_SIZE = 1000;
+    
     let allStores: Store[] = [];
     let totalCount = 0;
     let stdrYm = "";
@@ -257,6 +258,73 @@ export const fetchStores = async (zoneNo: string, onProgress: (msg: string) => v
     return { stores: allStores, stdrYm };
 };
 
+const fetchBaroApi = async (resId: string, catId: string, extraParams: string = "") => {
+    const serviceKey = getFormattedKey(DATA_API_KEY);
+    const url = `${BASE_URL}/baroApi?resId=${resId}&catId=${catId}&type=json&serviceKey=${serviceKey}${extraParams}`;
+    const text = await fetchWithRetry(url);
+    if (text.trim().startsWith('<')) return [];
+    try {
+        const json = JSON.parse(text);
+        if (json.body?.items) return Array.isArray(json.body.items) ? json.body.items : [json.body.items];
+        if (json.items) return Array.isArray(json.items) ? json.items : [json.items];
+        return [];
+    } catch (e) { return []; }
+};
+
+export const searchAdminDistrict = async (sido: string, sigungu: string, dong: string): Promise<Zone[]> => {
+    if (!DATA_API_KEY) throw new Error("API Key Missing");
+    
+    if (!sido) throw new Error("시/도 정보를 찾을 수 없습니다. (예: 서울특별시, 경기도)");
+
+    const sidos = await fetchBaroApi('dong', 'mega');
+    const targetSido = sidos.find((s: any) => s.ctprvnNm.includes(sido) || sido.includes(s.ctprvnNm));
+    
+    if (!targetSido) throw new Error(`행정구역(시도)을 찾을 수 없습니다: ${sido}`);
+    
+    let adminZones: Zone[] = [];
+
+    if (sigungu) {
+        const sigungus = await fetchBaroApi('dong', 'cty', `&ctprvnCd=${targetSido.ctprvnCd}`);
+        const targetSigungu = sigungus.find((s: any) => s.signguNm.includes(sigungu) || sigungu.includes(s.signguNm));
+        
+        if (targetSigungu) {
+            const dongs = await fetchBaroApi('dong', 'admi', `&signguCd=${targetSigungu.signguCd}`);
+            let filteredDongs = dongs;
+            
+            if (dong) {
+                const cleanDong = dong.replace(/[0-9.]+|동$/g, "").trim();
+                const matches = dongs.filter((d: any) => {
+                     const cleanAdong = d.adongNm.replace(/[0-9.]+|동$/g, "").trim();
+                     return d.adongNm.includes(dong) || (cleanDong.length > 0 && cleanAdong === cleanDong);
+                });
+
+                if (matches.length > 0) {
+                    filteredDongs = matches;
+                }
+            }
+
+            adminZones = filteredDongs.map((d: any) => ({
+                trarNo: d.adongCd,
+                mainTrarNm: `${targetSido.ctprvnNm} ${targetSigungu.signguNm} ${d.adongNm}`,
+                ctprvnNm: targetSido.ctprvnNm,
+                signguNm: targetSigungu.signguNm,
+                trarArea: "0",
+                coords: "",
+                type: 'admin',
+                adminCode: d.adongCd,
+                adminLevel: 'adongCd'
+            }));
+        } else {
+             throw new Error(`행정구역(시군구)을 찾을 수 없습니다: ${sigungu}`);
+        }
+    } else {
+        throw new Error("시군구 단위까지 정보가 필요합니다. (예: 서울 강남구)");
+    }
+
+    if (adminZones.length === 0) throw new Error("해당 조건에 맞는 행정동을 찾을 수 없습니다.");
+    return adminZones;
+};
+
 /**
  * V-World API를 통해 해당 좌표의 표준 행정구역 코드(행정안전부 기준)를 조회합니다.
  * SGIS 코드는 통계청 기준이라 공공데이터포털 상권 API와 불일치하는 경우가 많습니다.
@@ -281,8 +349,7 @@ const getStandardAdminCode = async (lat: number, lon: number): Promise<string | 
 }
 
 /**
- * SGIS 좌표 변환 및 리버스 지오코딩 (WGS84 -> UTM-K -> 행정동 추출)
- * SGIS 정보(Polygon용)와 V-World 정보(Data API용 AdminCode)를 병합하여 반환합니다.
+ * SGIS 리버스 지오코딩 및 V-World 표준 코드 조회를 통합하여 정확한 행정구역 정보를 반환합니다.
  */
 export const getAdminDistrictByLocation = async (lat: number, lon: number): Promise<Zone> => {
     try {
@@ -301,6 +368,7 @@ export const getAdminDistrictByLocation = async (lat: number, lon: number): Prom
         }
 
         // 2. 리버스 지오코딩 요청 (addr_type=21: 행정동)
+        // https://sgis.mods.go.kr/developer/html/newOpenApi/api/dataApi/addressBoundary.html#rgeocode
         const url = `${SGIS_BASE_URL}/addr/rgeocode.json?accessToken=${token}&x_coor=${utmkX}&y_coor=${utmkY}&addr_type=21`;
         
         const resStr = await fetchWithRetry(url);
@@ -311,10 +379,11 @@ export const getAdminDistrictByLocation = async (lat: number, lon: number): Prom
             const fullName = item.full_addr || `${item.sido_nm} ${item.sgg_nm} ${item.adm_nm}`;
             
             // 3. V-World를 통해 표준 행정코드(MOIS Code) 조회 시도
+            // SGIS adm_cd(7자리)와 공공데이터포털 상권정보 API의 key(10자리 행정안전부 코드)가 다름
             const moisCode = await getStandardAdminCode(lat, lon);
             
             return {
-                trarNo: moisCode || item.adm_cd, // Prefer MOIS code
+                trarNo: moisCode || item.adm_cd, // Prefer MOIS code for API calls
                 mainTrarNm: fullName,
                 ctprvnNm: item.sido_nm,
                 signguNm: item.sgg_nm,
@@ -343,32 +412,27 @@ export const fetchLocalAdminPolygon = async (zone: Zone): Promise<number[][][]> 
         console.log(`[SGIS] 행정구역 경계 데이터 요청: ${zone.mainTrarNm}`);
         const token = await getSgisToken();
         
-        // Use SGIS code if available, otherwise fallback to whatever is in adminCode
+        // SGIS code가 있으면 우선 사용, 없으면 adminCode 사용
         let admCd = zone.sgisCode || zone.adminCode;
 
         if (!admCd) {
-            // ... legacy geocode fallback ...
             const geoUrl = `${SGIS_BASE_URL}/addr/geocode.json?accessToken=${token}&address=${encodeURIComponent(zone.mainTrarNm)}`;
             let geoResStr = await fetchWithRetry(geoUrl);
             const geoData = JSON.parse(geoResStr);
             if (geoData.errCd === 0 && geoData.result?.resultdata?.length > 0) {
                 admCd = geoData.result.resultdata[0].adm_cd;
+            } else {
+                console.warn(`[SGIS] 주소 검색 실패: ${zone.mainTrarNm}`);
+                return [];
             }
         }
 
-        if (!admCd) {
-             console.warn(`[SGIS] 행정동 코드를 찾을 수 없습니다: ${zone.mainTrarNm}`);
-             return [];
-        }
-
-        // SGIS API requires 'year' parameter (2000~2025)
         const currentYear = new Date().getFullYear().toString();
         let boundUrl = `${SGIS_BASE_URL}/boundary/hadmarea.geojson?accessToken=${token}&adm_cd=${admCd}&year=${currentYear}&low_search=0`;
         
         let boundResStr = await fetchWithRetry(boundUrl);
         let boundData = JSON.parse(boundResStr);
 
-        // Fallback: If current year data is missing, try previous year
         if (!boundData.features || boundData.features.length === 0) {
              const prevYear = (new Date().getFullYear() - 1).toString();
              console.warn(`[SGIS] ${currentYear}년도 데이터 없음, ${prevYear}년도로 재시도`);
@@ -415,14 +479,12 @@ export const fetchLocalAdminPolygon = async (zone: Zone): Promise<number[][][]> 
 
 export const fetchStoresInAdmin = async (adminCode: string, divId: string, onProgress: (msg: string) => void): Promise<{ stores: Store[], stdrYm: string }> => {
     if (!DATA_API_KEY) throw new Error("API Key Missing");
-    // 요청당 데이터 수 1000개로 상향
-    const PAGE_SIZE = 1000;
+    
     let allStores: Store[] = [];
     let totalCount = 0;
     let stdrYm = "";
     
     const serviceKey = getFormattedKey(DATA_API_KEY);
-    // adminCode is expected to be MOIS standard code here
     const firstUrl = `${BASE_URL}/storeListInDong?divId=${divId}&key=${adminCode}&numOfRows=${PAGE_SIZE}&pageNo=1&serviceKey=${serviceKey}&type=json`;
     
     const firstText = await fetchWithRetry(firstUrl);
@@ -458,59 +520,6 @@ export const fetchStoresInAdmin = async (adminCode: string, divId: string, onPro
                 }
             } catch (e) {}
             onProgress(`${i} / ${totalPages} 페이지 수집 중... (행정구역 데이터)`);
-            await new Promise(r => setTimeout(r, 200));
-        }
-    }
-    return { stores: allStores, stdrYm };
-};
-
-export const fetchStoresInRectangle = async (minLat: number, minLon: number, maxLat: number, maxLon: number, onProgress: (msg: string) => void): Promise<{ stores: Store[], stdrYm: string }> => {
-    if (!DATA_API_KEY) throw new Error("API Key Missing");
-    // 요청당 데이터 수 1000개로 상향
-    const PAGE_SIZE = 1000;
-    let allStores: Store[] = [];
-    let totalCount = 0;
-    let stdrYm = "";
-    
-    const serviceKey = getFormattedKey(DATA_API_KEY);
-    const firstUrl = `${BASE_URL}/storeListInRectangle?minx=${minLon}&miny=${minLat}&maxx=${maxLon}&maxy=${maxLat}&numOfRows=${PAGE_SIZE}&pageNo=1&serviceKey=${serviceKey}&type=json`;
-    
-    const firstText = await fetchWithRetry(firstUrl);
-    
-    if (firstText.trim().startsWith('<')) {
-        // XML 에러가 나면 그냥 빈값 리턴 (좌표 검색 실패 시)
-        // throw new Error(parseXmlError(firstText));
-        return { stores: [], stdrYm: "" };
-    }
-
-    try {
-        const listJson = JSON.parse(firstText);
-        if (listJson.header?.stdrYm) stdrYm = String(listJson.header.stdrYm);
-        else if (listJson.response?.header?.stdrYm) stdrYm = String(listJson.response.header.stdrYm);
-        let items = listJson.body?.items || listJson.response?.body?.items;
-        if (items) {
-            allStores = Array.isArray(items) ? items : [items];
-            totalCount = listJson.body?.totalCount || listJson.response?.body?.totalCount || allStores.length;
-        }
-    } catch (e) {}
-
-    const totalPages = Math.ceil(totalCount / PAGE_SIZE);
-    
-    // MAX_PAGES 제한 제거 (전체 데이터 조회)
-    if (totalPages > 1) {
-        for (let i = 2; i <= totalPages; i++) {
-            const nextUrl = `${BASE_URL}/storeListInRectangle?minx=${minLon}&miny=${minLat}&maxx=${maxLon}&maxy=${maxLat}&numOfRows=${PAGE_SIZE}&pageNo=${i}&serviceKey=${serviceKey}&type=json`;
-            try {
-                const nextText = await fetchWithRetry(nextUrl);
-                if (!nextText.trim().startsWith('<')) {
-                    const nextJson = JSON.parse(nextText);
-                    if (nextJson.body?.items) {
-                        const nextItems = Array.isArray(nextJson.body.items) ? nextJson.body.items : [nextJson.body.items];
-                        allStores = [...allStores, ...nextItems];
-                    }
-                }
-            } catch (e) {}
-            onProgress(`${i} / ${totalPages} 페이지 수집 중... (영역 검색)`);
             await new Promise(r => setTimeout(r, 200));
         }
     }

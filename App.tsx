@@ -3,7 +3,7 @@ import { PieChart, Pie, Cell, BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveCo
 import * as Icons from './components/Icons';
 import TradeMap from './components/Map';
 import GoogleAd from './components/GoogleAd';
-import { searchAddress, searchZones, fetchStores, getAdminDistrictByLocation, fetchStoresInAdmin, fetchLocalAdminPolygon, fetchStoresInRectangle } from './services/api';
+import { searchAddress, searchZones, fetchStores, getAdminDistrictByLocation, fetchStoresInAdmin, fetchLocalAdminPolygon } from './services/api';
 import { Zone, Store, StoreStats } from './types';
 
 // Constants
@@ -50,17 +50,6 @@ const parseWKT = (wkt: string): number[][][] => {
   }
 };
 
-const isPointInPolygon = (lat: number, lon: number, polygon: number[][]): boolean => {
-    let inside = false;
-    for (let i = 0, j = polygon.length - 1; i < polygon.length; j = i++) {
-        const xi = polygon[i][1], yi = polygon[i][0]; // polygon is [lat, lon]
-        const xj = polygon[j][1], yj = polygon[j][0];
-        const intersect = ((yi > lat) !== (yj > lat)) && (lon < (xj - xi) * (lat - yi) / (yj - yi) + xi);
-        if (intersect) inside = !inside;
-    }
-    return inside;
-};
-
 const renderActiveShape = (props: any) => {
   const { cx, cy, innerRadius, outerRadius, startAngle, endAngle, fill } = props;
   return (
@@ -100,21 +89,6 @@ const App: React.FC = () => {
   // Interactive Map State
   const [selectedBuildingIndex, setSelectedBuildingIndex] = useState<number | null>(null);
   const [detailedAnalysisFilter, setDetailedAnalysisFilter] = useState<string | null>(null);
-
-  // Load AdSense Script Dynamically
-  useEffect(() => {
-    // @ts-ignore
-    // Safely access env to avoid undefined error
-    const adsenseId = import.meta.env?.VITE_GOOGLE_ADSENSE_ID;
-    if (adsenseId && !document.getElementById('google-adsense-script')) {
-        const script = document.createElement('script');
-        script.id = 'google-adsense-script';
-        script.src = `https://pagead2.googlesyndication.com/pagead/js/adsbygoogle.js?client=${adsenseId}`;
-        script.async = true;
-        script.crossOrigin = "anonymous";
-        document.head.appendChild(script);
-    }
-  }, []);
 
   const handleGeocode = async () => {
     if (!address) { setError("주소를 입력해주세요."); return; }
@@ -181,7 +155,7 @@ const App: React.FC = () => {
   const handleAnalyzeZone = async (selectedZone: Zone) => {
     setLoading(true); setLoadingMsg("상권 상세 데이터를 분석하고 있습니다..."); setError(null);
     setTradeZone(selectedZone);
-    // Don't set step to result yet. Wait for data.
+    setStep('result');
     setSelectedLarge(null); setSelectedMid(null);
     setSelectedBuildingIndex(null);
     setDetailedAnalysisFilter(null);
@@ -190,53 +164,14 @@ const App: React.FC = () => {
       let stores: Store[] = [];
       let stdrYm = "";
 
-      // Admin Mode Logic with Fallback
-      if (selectedZone.type === 'admin') {
-          // Priority 1: Use Rectangle Search if Polygon exists (Coordinates based)
-          if (selectedZone.parsedPolygon && selectedZone.parsedPolygon.length > 0 && selectedZone.parsedPolygon[0].length > 2) {
-             const ring = selectedZone.parsedPolygon[0];
-             let minLat = 90, maxLat = -90, minLon = 180, maxLon = -180;
-             ring.forEach(([lat, lon]) => {
-                 if (lat < minLat) minLat = lat;
-                 if (lat > maxLat) maxLat = lat;
-                 if (lon < minLon) minLon = lon;
-                 if (lon > maxLon) maxLon = lon;
-             });
-             
-             // Add buffer to bbox
-             const buffer = 0.001; 
-             const result = await fetchStoresInRectangle(minLat - buffer, minLon - buffer, maxLat + buffer, maxLon + buffer, (msg) => setLoadingMsg(msg));
-             
-             // Filter points inside polygon
-             if (result.stores.length > 0) {
-                 const filtered = result.stores.filter(s => {
-                     const slat = parseFloat(s.lat);
-                     const slon = parseFloat(s.lon);
-                     return isPointInPolygon(slat, slon, ring);
-                 });
-                 stores = filtered;
-                 stdrYm = result.stdrYm;
-                 console.log(`[AdminAnalysis] Rectangle search found ${result.stores.length}, filtered to ${filtered.length}`);
-             }
-          }
-
-          // Priority 2: Use Dong Code Search (Fallback if Priority 1 failed or returned 0)
-          if (stores.length === 0 && selectedZone.adminCode && selectedZone.adminLevel) {
-             console.log("[AdminAnalysis] Fallback to Dong Code search");
-             const result = await fetchStoresInAdmin(selectedZone.adminCode, selectedZone.adminLevel, (msg) => setLoadingMsg(msg));
-             stores = result.stores;
-             stdrYm = result.stdrYm;
-          }
-
+      if (selectedZone.type === 'admin' && selectedZone.adminCode && selectedZone.adminLevel) {
+          const result = await fetchStoresInAdmin(selectedZone.adminCode, selectedZone.adminLevel, (msg) => setLoadingMsg(msg));
+          stores = result.stores;
+          stdrYm = result.stdrYm;
       } else {
-          // Trade Mode (Standard)
           const result = await fetchStores(selectedZone.trarNo, (msg) => setLoadingMsg(msg));
           stores = result.stores;
           stdrYm = result.stdrYm;
-      }
-
-      if (!stores || stores.length === 0) {
-        throw new Error("해당 지역의 상권 데이터(점포 정보)가 없습니다.\n(행정구역 코드가 일치하지 않거나 데이터가 누락되었을 수 있습니다. '주요 상권 기준'으로 다시 검색해보세요.)");
       }
       
       const rawDate = stdrYm || stores[0]?.stdrYm || selectedZone.stdrYm || "";
@@ -246,7 +181,6 @@ const App: React.FC = () => {
       setDataDate(fmtDate);
       setAllRawStores(stores);
       analyzeData(stores);
-      setStep('result'); // Set step only after success
     } catch (err: any) {
       setError("상세 데이터 로딩 실패: " + err.message);
     } finally {
@@ -590,7 +524,6 @@ const App: React.FC = () => {
                     </div>
                 ))}
             </div>
-            {error && <p className="text-red-500 text-sm mt-4 text-center bg-red-50 p-2 rounded whitespace-pre-line">{error}</p>}
          </div>
       )}
 

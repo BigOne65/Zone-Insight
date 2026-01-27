@@ -17,8 +17,8 @@ export interface Zone {
   parsedPolygon?: number[][][];
   // New fields for Admin Analysis
   type?: 'trade' | 'admin'; // 'trade' = 주요상권, 'admin' = 행정구역
-  adminCode?: string;       // 행정동 코드 or 시군구 코드 (MOIS Standard Code for Data.go.kr)
-  sgisCode?: string;        // SGIS Statistical Code (for Polygon API)
+  adminCode?: string;       // 행정동 코드 or 시군구 코드
+  sgisCode?: string;        // SGIS 통계청 코드 (for Polygon)
   adminLevel?: string;      // 'adongCd' or 'signguCd'
 }
 
