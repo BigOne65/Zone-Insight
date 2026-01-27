@@ -32,8 +32,6 @@ const VWORLD_BASE_URL = "https://api.vworld.kr/req/search";
 // Update Base URL to mods.go.kr
 const SGIS_BASE_URL = "https://sgisapi.mods.go.kr/OpenAPI3";
 
-const PAGE_SIZE = 1000;
-
 // --- Cache ---
 const polygonCache = new Map<string, number[][][]>();
 
@@ -211,7 +209,7 @@ export const searchZones = async (lat: number, lon: number): Promise<Zone[]> => 
 
 export const fetchStores = async (zoneNo: string, onProgress: (msg: string) => void): Promise<{ stores: Store[], stdrYm: string }> => {
     if (!DATA_API_KEY) throw new Error("API Key Missing");
-    
+    const PAGE_SIZE = 500;
     let allStores: Store[] = [];
     let totalCount = 0;
     let stdrYm = "";
@@ -238,6 +236,7 @@ export const fetchStores = async (zoneNo: string, onProgress: (msg: string) => v
 
     const totalPages = Math.ceil(totalCount / PAGE_SIZE);
     
+    // 기존 루프 제한 해제 (loopLimit 삭제)
     if (totalPages > 1) {
         for (let i = 2; i <= totalPages; i++) {
             const nextUrl = `${BASE_URL}/storeListInArea?key=${zoneNo}&numOfRows=${PAGE_SIZE}&pageNo=${i}&serviceKey=${serviceKey}&type=json`;
@@ -325,83 +324,6 @@ export const searchAdminDistrict = async (sido: string, sigungu: string, dong: s
     return adminZones;
 };
 
-/**
- * V-World API를 통해 해당 좌표의 표준 행정구역 코드(행정안전부 기준)를 조회합니다.
- * SGIS 코드는 통계청 기준이라 공공데이터포털 상권 API와 불일치하는 경우가 많습니다.
- */
-const getStandardAdminCode = async (lat: number, lon: number): Promise<string | null> => {
-    if (!VWORLD_KEY || VWORLD_KEY.startsWith("YOUR")) return null;
-    
-    // Address Endpoint using PARCEL type to get admin code (level4AC)
-    // Replace base search url with address url
-    const url = `${"https://api.vworld.kr/req/address"}?service=address&request=getaddress&version=2.0&crs=EPSG:4326&point=${lon},${lat}&format=json&type=PARCEL&key=${VWORLD_KEY}`;
-    
-    try {
-        const data = await fetchJsonp(url);
-        if (data.response.status === "OK" && data.response.result?.length > 0) {
-            // structure.level4AC : 행정동 코드 (10자리)
-            return data.response.result[0].structure.level4AC || null;
-        }
-    } catch(e) { 
-        console.warn("V-World Reverse Geocode failed:", e); 
-    }
-    return null;
-}
-
-/**
- * SGIS 리버스 지오코딩 및 V-World 표준 코드 조회를 통합하여 정확한 행정구역 정보를 반환합니다.
- */
-export const getAdminDistrictByLocation = async (lat: number, lon: number): Promise<Zone> => {
-    try {
-        const token = await getSgisToken();
-        
-        // 1. WGS84 (Lat/Lon) -> UTM-K (SGIS Default) 변환
-        let utmkX = 0;
-        let utmkY = 0;
-
-        if (typeof proj4 !== 'undefined') {
-             const [x, y] = proj4(PROJ_WGS84, PROJ_5179, [lon, lat]);
-             utmkX = x;
-             utmkY = y;
-        } else {
-             throw new Error("좌표 변환 라이브러리(proj4)가 로드되지 않았습니다.");
-        }
-
-        // 2. 리버스 지오코딩 요청 (addr_type=21: 행정동)
-        // https://sgis.mods.go.kr/developer/html/newOpenApi/api/dataApi/addressBoundary.html#rgeocode
-        const url = `${SGIS_BASE_URL}/addr/rgeocode.json?accessToken=${token}&x_coor=${utmkX}&y_coor=${utmkY}&addr_type=21`;
-        
-        const resStr = await fetchWithRetry(url);
-        const resData = JSON.parse(resStr);
-
-        if (resData.errCd === 0 && resData.result && resData.result.length > 0) {
-            const item = resData.result[0];
-            const fullName = item.full_addr || `${item.sido_nm} ${item.sgg_nm} ${item.adm_nm}`;
-            
-            // 3. V-World를 통해 표준 행정코드(MOIS Code) 조회 시도
-            // SGIS adm_cd(7자리)와 공공데이터포털 상권정보 API의 key(10자리 행정안전부 코드)가 다름
-            const moisCode = await getStandardAdminCode(lat, lon);
-            
-            return {
-                trarNo: moisCode || item.adm_cd, // Prefer MOIS code for API calls
-                mainTrarNm: fullName,
-                ctprvnNm: item.sido_nm,
-                signguNm: item.sgg_nm,
-                trarArea: "0",
-                coords: "",
-                type: 'admin',
-                adminCode: moisCode || item.adm_cd, // Data API uses this
-                sgisCode: item.adm_cd,              // Polygon API uses this
-                adminLevel: 'adongCd'
-            };
-        } else {
-            throw new Error("해당 위치의 행정동 정보를 찾을 수 없습니다.");
-        }
-    } catch (e: any) {
-        throw new Error(`행정동 검색 실패: ${e.message}`);
-    }
-};
-
 export const fetchLocalAdminPolygon = async (zone: Zone): Promise<number[][][]> => {
     if (polygonCache.has(zone.mainTrarNm)) {
         console.log(`[SGIS] 캐시된 경계 데이터 사용: ${zone.mainTrarNm}`);
@@ -412,27 +334,28 @@ export const fetchLocalAdminPolygon = async (zone: Zone): Promise<number[][][]> 
         console.log(`[SGIS] 행정구역 경계 데이터 요청: ${zone.mainTrarNm}`);
         const token = await getSgisToken();
         
-        // SGIS code가 있으면 우선 사용, 없으면 adminCode 사용
-        let admCd = zone.sgisCode || zone.adminCode;
-
-        if (!admCd) {
-            const geoUrl = `${SGIS_BASE_URL}/addr/geocode.json?accessToken=${token}&address=${encodeURIComponent(zone.mainTrarNm)}`;
-            let geoResStr = await fetchWithRetry(geoUrl);
-            const geoData = JSON.parse(geoResStr);
-            if (geoData.errCd === 0 && geoData.result?.resultdata?.length > 0) {
-                admCd = geoData.result.resultdata[0].adm_cd;
-            } else {
-                console.warn(`[SGIS] 주소 검색 실패: ${zone.mainTrarNm}`);
-                return [];
-            }
+        const geoUrl = `${SGIS_BASE_URL}/addr/geocode.json?accessToken=${token}&address=${encodeURIComponent(zone.mainTrarNm)}`;
+        
+        let geoResStr = await fetchWithRetry(geoUrl);
+        const geoData = JSON.parse(geoResStr);
+        
+        let admCd = "";
+        if (geoData.errCd === 0 && geoData.result?.resultdata?.length > 0) {
+            admCd = geoData.result.resultdata[0].adm_cd;
+        } else {
+            console.warn(`[SGIS] 주소 검색 실패: ${zone.mainTrarNm}`);
+            return [];
         }
 
+        // SGIS API requires 'year' parameter (2000~2025)
+        // Automatically use current year (e.g. 2025)
         const currentYear = new Date().getFullYear().toString();
         let boundUrl = `${SGIS_BASE_URL}/boundary/hadmarea.geojson?accessToken=${token}&adm_cd=${admCd}&year=${currentYear}&low_search=0`;
         
         let boundResStr = await fetchWithRetry(boundUrl);
         let boundData = JSON.parse(boundResStr);
 
+        // Fallback: If current year data is missing, try previous year
         if (!boundData.features || boundData.features.length === 0) {
              const prevYear = (new Date().getFullYear() - 1).toString();
              console.warn(`[SGIS] ${currentYear}년도 데이터 없음, ${prevYear}년도로 재시도`);
@@ -479,7 +402,7 @@ export const fetchLocalAdminPolygon = async (zone: Zone): Promise<number[][][]> 
 
 export const fetchStoresInAdmin = async (adminCode: string, divId: string, onProgress: (msg: string) => void): Promise<{ stores: Store[], stdrYm: string }> => {
     if (!DATA_API_KEY) throw new Error("API Key Missing");
-    
+    const PAGE_SIZE = 500;
     let allStores: Store[] = [];
     let totalCount = 0;
     let stdrYm = "";
@@ -506,6 +429,7 @@ export const fetchStoresInAdmin = async (adminCode: string, divId: string, onPro
 
     const totalPages = Math.ceil(totalCount / PAGE_SIZE);
     
+    // 기존 루프 제한 해제 (loopLimit 삭제)
     if (totalPages > 1) {
         for (let i = 2; i <= totalPages; i++) {
             const nextUrl = `${BASE_URL}/storeListInDong?divId=${divId}&key=${adminCode}&numOfRows=${PAGE_SIZE}&pageNo=${i}&serviceKey=${serviceKey}&type=json`;
