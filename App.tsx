@@ -395,11 +395,6 @@ const App: React.FC = () => {
            {error && <p className="text-red-500 text-sm mt-2">{error}</p>}
         </div>
 
-        {/* AD Placement: Below Search Bar */}
-        <div className="max-w-2xl mx-auto mt-6 animate-fade-in">
-           <GoogleAd slot="2761269289" />
-        </div>
-
         {/* Content for AdSense Approval (Valuable Inventory) - Vertical Layout */}
         <div className="max-w-3xl mx-auto mt-8 md:mt-12 px-4 animate-fade-in space-y-8">
             <section className="bg-white p-6 rounded-xl border border-gray-100 shadow-sm">
