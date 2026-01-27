@@ -371,7 +371,7 @@ const App: React.FC = () => {
       {/* 1. Input */}
       {step === 'input' && (
         <>
-        <div className="bg-white rounded-2xl shadow-lg p-4 md:p-8 max-w-4xl mx-auto mt-6 md:mt-20 text-center animate-fade-in">
+        <div className="bg-white rounded-2xl shadow-lg p-4 md:p-8 max-w-6xl mx-auto mt-6 md:mt-20 text-center animate-fade-in">
            
            {/* Toggle Button for Analysis Standard */}
            <div className="flex justify-center mb-6">
@@ -405,10 +405,10 @@ const App: React.FC = () => {
         </div>
 
         {/* AdSense below Search Input */}
-        <GoogleAd slot="4992341640" className="max-w-4xl mx-auto mt-6" />
+        <GoogleAd slot="4992341640" className="max-w-6xl mx-auto mt-6" />
 
         {/* Content for AdSense Approval (Valuable Inventory) - Vertical Layout */}
-        <div className="max-w-4xl mx-auto mt-8 md:mt-12 px-4 animate-fade-in space-y-8">
+        <div className="max-w-6xl mx-auto mt-8 md:mt-12 px-4 animate-fade-in space-y-8">
             <section className="bg-white p-6 rounded-xl border border-gray-100 shadow-sm">
                 <h3 className="text-xl font-bold text-gray-800 mb-3 flex items-center gap-2">
                     <span className="bg-blue-100 text-blue-600 p-1.5 rounded-lg"><Icons.MapPin className="w-5 h-5"/></span>
