@@ -345,7 +345,7 @@ const App: React.FC = () => {
                     <Icons.Store className="w-6 h-6 md:w-8 md:h-8 text-white" strokeWidth={2.5} />
                 </div>
                 <h1 className="text-3xl md:text-4xl font-black text-gray-800 tracking-tight">
-                    <span className="bg-clip-text text-transparent bg-gradient-to-r from-blue-700 to-indigo-600">상권</span>분석
+                    주소기반 <span className="bg-clip-text text-transparent bg-gradient-to-r from-blue-700 to-indigo-600">상권분석</span>
                 </h1>
             </div>
             <div className="h-6 flex items-center justify-center">
@@ -700,7 +700,7 @@ const App: React.FC = () => {
                                <div className="h-full overflow-y-auto custom-scrollbar">
                                   <table className="w-full text-sm text-left">
                                      <thead className="bg-gray-50 text-gray-600 sticky top-0 font-medium">
-                                         <tr><th className="px-3 py-2">대분류명</th><th className="px-3 py-2 text-right">점포수</th><th className="px-3 py-2 text-right">비율</th></tr>
+                                          <tr><th className="px-3 py-2">대분류명</th><th className="px-3 py-2 text-right">점포수</th><th className="px-3 py-2 text-right">비율</th></tr>
                                      </thead>
                                      <tbody className="divide-y">
                                         {storeStats.pieData.map((d,i) => (
