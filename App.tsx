@@ -291,7 +291,7 @@ const App: React.FC = () => {
         franchiseRate: filtered.length ? ((franchise/filtered.length)*100).toFixed(1) : "0",
         summaryTableData
     });
-    setTopStores(sortedStores.slice(0, 30));
+    setTopStores(sortedStores.slice(0, 50));
   };
 
   useEffect(() => {
@@ -841,8 +841,8 @@ const App: React.FC = () => {
 
                  {/* Store List */}
                  <div className="bg-white rounded-xl shadow-sm border overflow-hidden">
-                    <div className="p-4 md:p-6 border-b bg-gray-50"><h3 className="text-lg font-bold text-gray-800">📌 주요 프랜차이즈 및 유명 브랜드 (Top 30)</h3></div>
-                    <div className="overflow-x-auto max-h-96 custom-scrollbar">
+                    <div className="p-4 md:p-6 border-b bg-gray-50"><h3 className="text-lg font-bold text-gray-800">📌 주요 프랜차이즈 및 유명 브랜드 (가나다순)</h3></div>
+                    <div className="overflow-x-auto max-h-[600px] custom-scrollbar">
                        <table className="w-full text-left text-sm text-gray-600">
                           <thead className="bg-gray-100 text-gray-700 uppercase font-semibold sticky top-0">
                              <tr>
