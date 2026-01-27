@@ -3,6 +3,7 @@ import { PieChart, Pie, Cell, BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveCo
 import * as Icons from './components/Icons';
 import TradeMap from './components/Map';
 import GoogleAd from './components/GoogleAd';
+import PrivacyPolicyModal from './components/PrivacyPolicyModal';
 import { searchAddress, searchZones, fetchStores, searchAdminDistrict, fetchStoresInAdmin, fetchLocalAdminPolygon } from './services/api';
 import { Zone, Store, StoreStats } from './types';
 
@@ -89,6 +90,9 @@ const App: React.FC = () => {
   // Interactive Map State
   const [selectedBuildingIndex, setSelectedBuildingIndex] = useState<number | null>(null);
   const [detailedAnalysisFilter, setDetailedAnalysisFilter] = useState<string | null>(null);
+
+  // Privacy Policy Modal State
+  const [isPrivacyOpen, setIsPrivacyOpen] = useState(false);
 
   const handleGeocode = async () => {
     if (!address) { setError("주소를 입력해주세요."); return; }
@@ -323,7 +327,8 @@ const App: React.FC = () => {
   };
 
   return (
-    <div className="min-h-screen max-w-6xl mx-auto p-3 md:p-8">
+    <div className="min-h-screen max-w-6xl mx-auto p-3 md:p-8 flex flex-col">
+      <div className="flex-grow">
       {/* Header */}
       <header className="mb-10 flex flex-col items-center justify-center gap-4 text-center relative pt-4 md:pt-8">
          <div 
@@ -364,7 +369,6 @@ const App: React.FC = () => {
       {step === 'input' && (
         <>
         <div className="bg-white rounded-2xl shadow-lg p-4 md:p-8 max-w-4xl mx-auto mt-6 md:mt-20 text-center animate-fade-in">
-           <h2 className="text-lg md:text-xl font-bold mb-4 md:mb-6">분석할 지역의 주소를 입력해주세요</h2>
            
            {/* Toggle Button for Analysis Standard */}
            <div className="flex justify-center mb-6">
@@ -384,6 +388,8 @@ const App: React.FC = () => {
                </div>
            </div>
 
+           <h2 className="text-lg md:text-xl font-bold mb-4 md:mb-6">분석할 지역의 주소를 입력해주세요</h2>
+           
            <div className="flex flex-col gap-2 mb-4">
               <div className="flex flex-col md:flex-row gap-2">
                   <input value={address} onChange={e => setAddress(e.target.value)} onKeyDown={e => e.key === 'Enter' && handleGeocode()} className="w-full md:flex-1 p-3 md:p-4 border border-gray-300 rounded-xl text-base md:text-lg outline-none focus:ring-2 focus:ring-blue-500" placeholder="예: 테헤란로 000" />
@@ -836,6 +842,22 @@ const App: React.FC = () => {
              </div>
           </div>
       )}
+
+      </div>
+      
+      {/* Footer */}
+      <footer className="mt-12 py-6 border-t border-gray-200 text-center text-gray-400 text-xs">
+         <div className="flex justify-center gap-4 mb-2">
+            <button onClick={() => setIsPrivacyOpen(true)} className="hover:text-gray-600 underline">개인정보처리방침</button>
+            <span className="text-gray-300">|</span>
+            <button onClick={() => setIsPrivacyOpen(true)} className="hover:text-gray-600 underline">이용약관</button>
+         </div>
+         <p>&copy; {new Date().getFullYear()} Commercial Area Analysis. All rights reserved.</p>
+         <p className="mt-1">데이터 출처: 공공데이터포털(소상공인시장진흥공단), V-World API</p>
+      </footer>
+
+      {/* Privacy Policy Modal */}
+      <PrivacyPolicyModal isOpen={isPrivacyOpen} onClose={() => setIsPrivacyOpen(false)} />
     </div>
   );
 };
