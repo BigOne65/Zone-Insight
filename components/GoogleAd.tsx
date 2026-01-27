@@ -1,4 +1,4 @@
-import React, { useEffect, useRef, useState } from 'react';
+import React, { useEffect, useRef } from 'react';
 
 interface GoogleAdProps {
   className?: string;
@@ -18,70 +18,51 @@ declare global {
 
 const GoogleAd: React.FC<GoogleAdProps> = ({
   className = "",
-  style = { display: 'block' },
+  style = {},
   client = "ca-pub-4276127967714914", // Your Publisher ID
   slot,
-  format = "horizontal", // Default set to 'horizontal' per user request
+  format = "horizontal",
   responsive = "true",
   layout
 }) => {
-  const adRef = useRef<HTMLModElement>(null);
-  const [isAdPushed, setIsAdPushed] = useState(false);
+  // Use a ref to track if the ad push has already happened to prevent double-push in Strict Mode
+  const adPushedRef = useRef(false);
+  
+  // Detect Development Mode (Vite specific)
+  // @ts-ignore
+  const isDev = import.meta.env.DEV;
 
   useEffect(() => {
     // Prevent pushing multiple times for the same component instance
-    if (isAdPushed) return;
+    if (adPushedRef.current) return;
 
-    const element = adRef.current;
-    if (!element) return;
-
-    const pushAd = () => {
-      try {
-        // Double check innerHTML to be safe
-        if (element && element.innerHTML === "") {
-          (window.adsbygoogle = window.adsbygoogle || []).push({});
-          setIsAdPushed(true);
-        }
-      } catch (e) {
-        console.error("AdSense error:", e);
-      }
-    };
-
-    // If element already has width, push immediately
-    if (element.offsetWidth > 0) {
-        pushAd();
-    } else {
-        // Wait for element to have width (layout painted) to avoid "availableWidth=0" error
-        const observer = new ResizeObserver((entries) => {
-            for (const entry of entries) {
-                if (entry.contentRect.width > 0) {
-                    pushAd();
-                    observer.disconnect();
-                }
-            }
-        });
-        
-        observer.observe(element);
-        
-        return () => {
-            observer.disconnect();
-        };
+    try {
+      // Safe push operation
+      const adsbygoogle = window.adsbygoogle || [];
+      adsbygoogle.push({});
+      adPushedRef.current = true;
+    } catch (e) {
+      console.error("AdSense push error:", e);
     }
-  }, [isAdPushed, slot, client]);
+  }, [slot]); // Depend on slot to re-trigger if slot changes (though unlikely for static ad spots)
 
   return (
-    <div className={`google-ad-container my-8 w-full flex justify-center bg-gray-50 rounded-lg overflow-hidden ${className}`}>
+    <div 
+      className={`google-ad-container my-8 w-full flex justify-center bg-gray-50 rounded-lg overflow-hidden ${className}`}
+      // CLS Prevention: Minimum height to reserve space
+      style={{ minHeight: '280px', ...style }} 
+    >
         {/* 광고 라벨 */}
         <div className="w-full text-center">
             <div className="text-[10px] text-gray-400 mb-1 uppercase tracking-wider">Advertisement</div>
             <ins
-                ref={adRef}
                 className="adsbygoogle"
-                style={style}
+                style={{ display: 'block' }}
                 data-ad-client={client}
                 data-ad-slot={slot}
                 data-ad-format={format}
                 data-full-width-responsive={responsive}
+                data-adtest={isDev ? "on" : "off"} // Show test ads in development
                 {...(layout ? { 'data-ad-layout': layout } : {})}
             />
         </div>

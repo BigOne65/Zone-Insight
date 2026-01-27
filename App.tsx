@@ -323,7 +323,7 @@ const App: React.FC = () => {
   };
 
   return (
-    <div className="min-h-screen max-w-6xl mx-auto p-3 md:p-8 flex flex-col">
+    <div className="min-h-screen max-w-6xl mx-auto p-3 md:p-8 flex flex-col" suppressHydrationWarning={true}>
       <div className="flex-grow">
       {/* Header */}
       <header className="mb-10 flex flex-col items-center justify-center gap-4 text-center relative pt-4 md:pt-8">
