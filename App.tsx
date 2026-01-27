@@ -405,7 +405,7 @@ const App: React.FC = () => {
         </div>
 
         {/* AdSense below Search Input */}
-        <GoogleAd slot="4992341640" className="max-w-6xl mx-auto mt-6" />
+        <GoogleAd slot="4992341640" className="max-w-6xl mx-auto mt-6" style={{ minHeight: '100px' }} />
 
         {/* Content for AdSense Approval (Valuable Inventory) - Vertical Layout */}
         <div className="max-w-6xl mx-auto mt-8 md:mt-12 px-4 animate-fade-in space-y-8">
@@ -418,7 +418,7 @@ const App: React.FC = () => {
                     공개된 상권 데이터를 기반으로, 
                     특정 지역(주소) 주변의 <strong>점포 현황, 업종 분포, 프랜차이즈 비율</strong> 등을 
                     분석하여 제공하는 무료 웹 서비스입니다. 
-                    {searchType === 'trade' ? '상가 밀집 구역(주요 상권)을 중심으로' : '행정 구역 내의 주요 상권을 기준으로'} 데이터를 분석합니다.
+                    {searchType === 'trade' ? '상가 밀집 구역(주요 상권)을 중심으로' : '행정 구역을 기준으로'} 데이터를 분석합니다.
                 </p>
             </section>
             
