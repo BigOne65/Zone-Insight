@@ -589,9 +589,9 @@ const App: React.FC = () => {
                         <div className="bg-white p-4 rounded-xl shadow-sm border border-gray-100 flex flex-col items-center text-center">
                              <div className="bg-yellow-100 p-2 rounded-full mb-2"><Icons.Wallet className="w-5 h-5 text-yellow-600"/></div>
                              <h4 className="text-sm text-gray-500 font-medium">매출 1위 업종</h4>
-                             <p className="text-lg md:text-xl font-bold text-gray-800 mt-1 truncate max-w-full px-2">{sbizStats.maxSales?.type || "-"}</p>
+                             <p className="text-lg md:text-xl font-bold text-gray-800 mt-1 break-keep leading-tight px-1">{sbizStats.maxSales?.type || "-"}</p>
                              <div className="text-xs text-gray-400 mt-1 flex flex-col items-center">
-                                 <span>월 {sbizStats.maxSales?.amount.toLocaleString()}만원 ({sbizStats.maxSales?.percent}%)</span>
+                                 <span>월 평균 매출 {sbizStats.maxSales?.amount.toLocaleString()}만원 ({sbizStats.maxSales?.percent}%)</span>
                                  <span className="text-[10px] text-gray-300 mt-0.5">{sbizStats.maxSales?.date} 기준</span>
                              </div>
                         </div>
@@ -601,7 +601,7 @@ const App: React.FC = () => {
                              <h4 className="text-sm text-gray-500 font-medium">배달 피크 요일</h4>
                              <p className="text-xl md:text-2xl font-bold text-gray-800 mt-1">{sbizStats.delivery?.day ? `${sbizStats.delivery.day}요일` : "-"}</p>
                              <div className="text-xs text-gray-400 mt-1 flex flex-col items-center">
-                                 <span>월 {sbizStats.delivery?.count}건 ({sbizStats.delivery?.percent}%)</span>
+                                 <span>월 {sbizStats.delivery?.count}건 ({Number(sbizStats.delivery?.percent).toFixed(1)}%)</span>
                                  <span className="text-[10px] text-gray-300 mt-0.5">{sbizStats.delivery?.date} 기준</span>
                              </div>
                         </div>
