@@ -3,7 +3,6 @@ import { PieChart, Pie, Cell, BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveCo
 import * as Icons from './components/Icons';
 import TradeMap from './components/Map';
 import GoogleAd from './components/GoogleAd';
-import PrivacyPolicyModal from './components/PrivacyPolicyModal';
 import { searchAddress, searchZones, fetchStores, searchAdminDistrict, fetchStoresInAdmin, fetchLocalAdminPolygon } from './services/api';
 import { Zone, Store, StoreStats } from './types';
 
@@ -90,9 +89,6 @@ const App: React.FC = () => {
   // Interactive Map State
   const [selectedBuildingIndex, setSelectedBuildingIndex] = useState<number | null>(null);
   const [detailedAnalysisFilter, setDetailedAnalysisFilter] = useState<string | null>(null);
-
-  // Privacy Policy Modal State
-  const [isPrivacyOpen, setIsPrivacyOpen] = useState(false);
 
   const handleGeocode = async () => {
     if (!address) { setError("주소를 입력해주세요."); return; }
@@ -846,16 +842,13 @@ const App: React.FC = () => {
       {/* Footer */}
       <footer className="mt-12 py-6 border-t border-gray-200 text-center text-gray-400 text-xs">
          <div className="flex justify-center gap-4 mb-2">
-            <button onClick={() => setIsPrivacyOpen(true)} className="hover:text-gray-600 underline">개인정보처리방침</button>
+            <a href="/privacy.html" className="hover:text-gray-600 underline">개인정보처리방침</a>
             <span className="text-gray-300">|</span>
-            <button onClick={() => setIsPrivacyOpen(true)} className="hover:text-gray-600 underline">이용약관</button>
+            <a href="/privacy.html" className="hover:text-gray-600 underline">이용약관</a>
          </div>
          <p>&copy; 2026 상권분석 앱. All rights reserved.</p>
          <p className="mt-1">데이터 출처: 공공데이터포털(Data.go.kr), V-World, SGIS</p>
       </footer>
-
-      {/* Privacy Policy Modal */}
-      <PrivacyPolicyModal isOpen={isPrivacyOpen} onClose={() => setIsPrivacyOpen(false)} />
     </div>
   );
 };
