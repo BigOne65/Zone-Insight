@@ -439,3 +439,58 @@ export const fetchStoresInAdmin = async (adminCode: string, divId: string, onPro
     }
     return { stores: allStores, stdrYm };
 };
+
+export const fetchStoresInRectangle = async (minLat: number, minLon: number, maxLat: number, maxLon: number, onProgress: (msg: string) => void): Promise<{ stores: Store[], stdrYm: string }> => {
+    if (!DATA_API_KEY) throw new Error("API Key Missing");
+    const PAGE_SIZE = 500;
+    let allStores: Store[] = [];
+    let totalCount = 0;
+    let stdrYm = "";
+    
+    const serviceKey = getFormattedKey(DATA_API_KEY);
+    const firstUrl = `${BASE_URL}/storeListInRectangle?minx=${minLon}&miny=${minLat}&maxx=${maxLon}&maxy=${maxLat}&numOfRows=${PAGE_SIZE}&pageNo=1&serviceKey=${serviceKey}&type=json`;
+    
+    const firstText = await fetchWithRetry(firstUrl);
+    
+    if (firstText.trim().startsWith('<')) {
+        // XML 에러가 나면 그냥 빈값 리턴 (좌표 검색 실패 시)
+        // throw new Error(parseXmlError(firstText));
+        return { stores: [], stdrYm: "" };
+    }
+
+    try {
+        const listJson = JSON.parse(firstText);
+        if (listJson.header?.stdrYm) stdrYm = String(listJson.header.stdrYm);
+        else if (listJson.response?.header?.stdrYm) stdrYm = String(listJson.response.header.stdrYm);
+        let items = listJson.body?.items || listJson.response?.body?.items;
+        if (items) {
+            allStores = Array.isArray(items) ? items : [items];
+            totalCount = listJson.body?.totalCount || listJson.response?.body?.totalCount || allStores.length;
+        }
+    } catch (e) {}
+
+    const totalPages = Math.ceil(totalCount / PAGE_SIZE);
+    
+    // 최대 10페이지로 제한 (사각형 검색은 데이터가 많을 수 있음)
+    const MAX_PAGES = 10;
+    const fetchPages = Math.min(totalPages, MAX_PAGES);
+
+    if (fetchPages > 1) {
+        for (let i = 2; i <= fetchPages; i++) {
+            const nextUrl = `${BASE_URL}/storeListInRectangle?minx=${minLon}&miny=${minLat}&maxx=${maxLon}&maxy=${maxLat}&numOfRows=${PAGE_SIZE}&pageNo=${i}&serviceKey=${serviceKey}&type=json`;
+            try {
+                const nextText = await fetchWithRetry(nextUrl);
+                if (!nextText.trim().startsWith('<')) {
+                    const nextJson = JSON.parse(nextText);
+                    if (nextJson.body?.items) {
+                        const nextItems = Array.isArray(nextJson.body.items) ? nextJson.body.items : [nextJson.body.items];
+                        allStores = [...allStores, ...nextItems];
+                    }
+                }
+            } catch (e) {}
+            onProgress(`${i} / ${fetchPages} 페이지 수집 중... (영역 검색)`);
+            await new Promise(r => setTimeout(r, 200));
+        }
+    }
+    return { stores: allStores, stdrYm };
+};

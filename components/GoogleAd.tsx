@@ -19,7 +19,7 @@ declare global {
 const GoogleAd: React.FC<GoogleAdProps> = ({
   className = "",
   style = { display: 'block' },
-  client = "ca-pub-4276127967714914", // Your Publisher ID
+  client,
   slot,
   format = "horizontal", // Default set to 'horizontal' per user request
   responsive = "true",
@@ -27,10 +27,16 @@ const GoogleAd: React.FC<GoogleAdProps> = ({
 }) => {
   const adRef = useRef<HTMLModElement>(null);
   const [isAdPushed, setIsAdPushed] = useState(false);
+  
+  // @ts-ignore
+  // Safely access env to avoid undefined error
+  const envClient = import.meta.env?.VITE_GOOGLE_ADSENSE_ID;
+  const finalClient = client || envClient;
 
   useEffect(() => {
     // Prevent pushing multiple times for the same component instance
     if (isAdPushed) return;
+    if (!finalClient) return;
 
     const element = adRef.current;
     if (!element) return;
@@ -67,7 +73,9 @@ const GoogleAd: React.FC<GoogleAdProps> = ({
             observer.disconnect();
         };
     }
-  }, [isAdPushed, slot, client]);
+  }, [isAdPushed, slot, finalClient]);
+
+  if (!finalClient) return null;
 
   return (
     <div className={`google-ad-container my-8 w-full flex justify-center bg-gray-50 rounded-lg overflow-hidden ${className}`}>
@@ -78,7 +86,7 @@ const GoogleAd: React.FC<GoogleAdProps> = ({
                 ref={adRef}
                 className="adsbygoogle"
                 style={style}
-                data-ad-client={client}
+                data-ad-client={finalClient}
                 data-ad-slot={slot}
                 data-ad-format={format}
                 data-full-width-responsive={responsive}
