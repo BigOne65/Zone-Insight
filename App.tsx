@@ -90,21 +90,6 @@ const App: React.FC = () => {
   const [selectedBuildingIndex, setSelectedBuildingIndex] = useState<number | null>(null);
   const [detailedAnalysisFilter, setDetailedAnalysisFilter] = useState<string | null>(null);
 
-  // Load AdSense Script Dynamically
-  useEffect(() => {
-    // @ts-ignore
-    // Safely access env to avoid undefined error
-    const adsenseId = import.meta.env?.VITE_GOOGLE_ADSENSE_ID;
-    if (adsenseId && !document.getElementById('google-adsense-script')) {
-        const script = document.createElement('script');
-        script.id = 'google-adsense-script';
-        script.src = `https://pagead2.googlesyndication.com/pagead/js/adsbygoogle.js?client=${adsenseId}`;
-        script.async = true;
-        script.crossOrigin = "anonymous";
-        document.head.appendChild(script);
-    }
-  }, []);
-
   const handleGeocode = async () => {
     if (!address) { setError("주소를 입력해주세요."); return; }
     setLoading(true); setLoadingMsg("주소 위치를 확인하고 있습니다..."); setError(null);
@@ -139,11 +124,12 @@ const App: React.FC = () => {
       } else {
           setLoadingMsg("해당 위치의 행정동 정보를 조회하고 있습니다...");
           
-          // Use coordinate-based reverse geocoding via standard SGIS API
+          // Use coordinate-based reverse geocoding instead of text parsing
           const adminZone = await getAdminDistrictByLocation(searchCoords.lat, searchCoords.lon);
           
           setLoadingMsg("행정구역 경계 데이터(Polygon)를 불러오는 중입니다...");
           
+          // Fetch polygon for the found admin zone
           const baseZone = {
               ...adminZone,
               searchLat: searchCoords.lat,
@@ -170,7 +156,7 @@ const App: React.FC = () => {
   const handleAnalyzeZone = async (selectedZone: Zone) => {
     setLoading(true); setLoadingMsg("상권 상세 데이터를 분석하고 있습니다..."); setError(null);
     setTradeZone(selectedZone);
-    // Don't set step to result yet. Wait for data.
+    setStep('result');
     setSelectedLarge(null); setSelectedMid(null);
     setSelectedBuildingIndex(null);
     setDetailedAnalysisFilter(null);
@@ -188,10 +174,6 @@ const App: React.FC = () => {
           stores = result.stores;
           stdrYm = result.stdrYm;
       }
-
-      if (!stores || stores.length === 0) {
-        throw new Error("해당 지역의 상권 데이터(점포 정보)가 없습니다.");
-      }
       
       const rawDate = stdrYm || stores[0]?.stdrYm || selectedZone.stdrYm || "";
       const cleanDate = rawDate.replace(/[^0-9]/g, '');
@@ -200,7 +182,6 @@ const App: React.FC = () => {
       setDataDate(fmtDate);
       setAllRawStores(stores);
       analyzeData(stores);
-      setStep('result'); // Set step only after success
     } catch (err: any) {
       setError("상세 데이터 로딩 실패: " + err.message);
     } finally {
@@ -544,7 +525,6 @@ const App: React.FC = () => {
                     </div>
                 ))}
             </div>
-            {error && <p className="text-red-500 text-sm mt-4 text-center bg-red-50 p-2 rounded">{error}</p>}
          </div>
       )}
 
