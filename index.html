@@ -4,7 +4,7 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <meta name="description" content="전국 상권 분석 및 행정구역 상권 데이터를 무료로 제공하는 서비스입니다. 창업, 프랜차이즈 입지 분석에 최적화된 데이터를 확인하세요.">
-    <meta name="keywords" content="상권분석, 창업, 프랜차이즈, 입지분석, 소상공인, 상가정보, 유동인구">
+    <meta name="keywords" content="상권분석, 창업, 프랜차이즈, 입지분석, 소상공인, 상가정보, 유동인구, 예비창업, 매출분석">
     <title>상권 분석앱 - 창업 및 입지 분석 필수 도구</title>
     
     <!-- Google AdSense -->
@@ -73,43 +73,130 @@
 </script>
 </head>
 <body>
-    <div id="root">
-        <!-- 
-            [AdSense & SEO Crawler Optimization]
-            이 내용은 React가 로드되기 전, 봇에게 사이트의 주제를 전달하기 위한 정적 콘텐츠입니다.
-            React Hydration/Rendering 시점에 자동으로 대체됩니다.
-        -->
-        <div style="padding: 20px; max-width: 800px; margin: 0 auto; line-height: 1.6; color: #333;">
-            <h1 style="font-size: 2em; font-weight: bold; margin-bottom: 20px;">대한민국 무료 상권 분석 및 입지 정보 서비스</h1>
-            
-            <section>
-                <h2 style="font-size: 1.5em; font-weight: bold; margin-top: 30px;">소상공인과 예비 창업자를 위한 빅데이터 상권 분석</h2>
-                <p>
-                    성공적인 창업의 첫걸음은 정확한 상권 분석에서 시작합니다. 본 서비스는 공공데이터포털(Data.go.kr)과 국토교통부 V-World, 통계청 SGIS API를 연동하여
-                    전국 주요 상권과 행정구역(동 단위)의 실시간 데이터를 무료로 제공합니다.
-                </p>
-            </section>
+    <div id="root"></div>
+    
+    <!-- 
+        [SEO & AdSense Static Content]
+        이 영역은 React App(#root) 외부에 존재하므로 페이지 로딩 후에도 유지됩니다.
+        접고 펼칠 수 있는 형태(<details>)로 구성되어 사용자 경험을 해치지 않으면서 검색엔진 봇에게 정보를 제공합니다.
+    -->
+    <div class="w-full bg-[#f8fafc] pb-8">
+        <div class="max-w-6xl mx-auto px-4 md:px-8 mt-4">
+            <details class="bg-white rounded-xl shadow-sm border border-gray-200 overflow-hidden group">
+                <summary class="flex items-center justify-between p-4 cursor-pointer list-none hover:bg-gray-50 transition-colors select-none">
+                    <div class="flex items-center gap-3">
+                        <div class="bg-blue-100 p-2 rounded-lg text-blue-600">
+                            <!-- Info Icon -->
+                            <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"></circle><line x1="12" y1="16" x2="12" y2="12"></line><line x1="12" y1="8" x2="12.01" y2="8"></line></svg>
+                        </div>
+                        <span class="font-bold text-gray-700 text-sm md:text-base">서비스 상세 소개 및 상권 분석 가이드 (더보기)</span>
+                    </div>
+                    <div class="text-gray-400 transform transition-transform duration-300 group-open:rotate-180">
+                        <!-- Chevron Down -->
+                        <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="6 9 12 15 18 9"></polyline></svg>
+                    </div>
+                </summary>
+                
+                <div class="p-6 border-t border-gray-100 text-gray-600 leading-relaxed text-sm md:text-base animate-fade-in space-y-8">
+                    <!-- Intro -->
+                    <section>
+                        <h1 class="text-xl md:text-2xl font-bold text-gray-800 mb-3">대한민국 무료 상권 분석 및 입지 정보 서비스</h1>
+                        <p class="mb-2">
+                            성공적인 창업의 첫걸음은 정확한 상권 분석에서 시작합니다. 본 서비스는 <strong>공공데이터포털(Data.go.kr), 국토교통부 V-World, 통계청 SGIS API</strong>를 연동하여
+                            전국 주요 상권과 행정구역(동 단위)의 실시간 데이터를 무료로 제공합니다. 복잡한 유료 컨설팅 없이도 객관적인 지표를 통해 입지의 가치를 판단하세요.
+                        </p>
+                    </section>
+                    
+                    <!-- Feature Highlights -->
+                    <section class="grid grid-cols-1 md:grid-cols-2 gap-4">
+                        <div class="bg-gray-50 p-4 rounded-lg">
+                            <h2 class="text-base font-bold text-gray-800 mb-2 flex items-center gap-2">📊 업종별 분포 분석</h2>
+                            <p class="text-sm">음식점, 소매업, 서비스업 등 대분류 및 중분류별 점포 수와 비율을 차트로 시각화합니다. 해당 지역의 주력 업종이 무엇인지 파악하고 과포화 상태를 진단할 수 있습니다.</p>
+                        </div>
+                        <div class="bg-gray-50 p-4 rounded-lg">
+                            <h2 class="text-base font-bold text-gray-800 mb-2 flex items-center gap-2">🏢 프랜차이즈 비율 분석</h2>
+                            <p class="text-sm">지역 내 개인 점포와 프랜차이즈 가맹점의 비율을 분석합니다. 프랜차이즈 비율이 높다면 브랜드 파워가 중요한 상권이며, 낮다면 개성 있는 개인 매장이 유리할 수 있습니다.</p>
+                        </div>
+                    </section>
 
-            <section>
-                <h2 style="font-size: 1.5em; font-weight: bold; margin-top: 30px;">주요 기능 및 제공 데이터</h2>
-                <ul>
-                    <li><strong>업종별 분포 분석:</strong> 음식점, 소매업, 서비스업 등 대분류 및 중분류별 점포 수와 비율을 시각화된 차트로 제공합니다.</li>
-                    <li><strong>프랜차이즈 비율:</strong> 해당 지역 내 프랜차이즈 가맹점의 비율을 분석하여 상권의 특성(대형 브랜드 중심 vs 개인 점포 중심)을 파악합니다.</li>
-                    <li><strong>상가 밀집도 및 1층 점포 비율:</strong> 유동인구 접근성이 높은 1층 점포의 비중과 주요 상가 건물의 밀집도를 분석합니다.</li>
-                    <li><strong>행정구역 및 상권 경계 지도:</strong> 실제 상권의 영역을 지도 위에 폴리곤으로 표시하여 직관적인 위치 파악이 가능합니다.</li>
-                </ul>
-            </section>
+                    <!-- Analysis Guide (New Content for Value) -->
+                    <section>
+                        <h2 class="text-lg font-bold text-gray-800 mb-4 pb-2 border-b border-gray-100">💡 초보 창업자를 위한 상권 데이터 활용 가이드</h2>
+                        <ul class="space-y-4">
+                            <li>
+                                <strong class="text-blue-600 block mb-1">Step 1. 경쟁 강도 파악하기</strong>
+                                내가 창업하려는 아이템(예: 카페)이 해당 상권에 몇 개나 있는지 확인하세요. '세부 업종 Top 10' 차트에서 동종 업계 점포 수가 지나치게 많다면 진입 장벽이 높을 수 있습니다.
+                            </li>
+                            <li>
+                                <strong class="text-blue-600 block mb-1">Step 2. 1층 점포 비율 확인하기</strong>
+                                '1층 점포 비율'이 높다는 것은 유동인구의 접근성이 좋고 임대료가 상대적으로 높게 형성된 상권임을 의미합니다. 반면 비율이 낮다면 목적형 소비(예: 학원, 병원, 오피스) 중심일 가능성이 높습니다.
+                            </li>
+                            <li>
+                                <strong class="text-blue-600 block mb-1">Step 3. 상권의 성격 규명하기</strong>
+                                행정구역(동) 단위 분석과 주요 상권(상가 밀집 구역) 단위 분석을 비교해보세요. 주거 밀집 지역과 오피스 상권은 소비 패턴이 완전히 다르므로 타겟 고객층을 명확히 설정해야 합니다.
+                            </li>
+                        </ul>
+                    </section>
 
-            <section>
-                <h2 style="font-size: 1.5em; font-weight: bold; margin-top: 30px;">이용 방법</h2>
-                <p>
-                    복잡한 회원가입 절차 없이, 분석을 원하는 지역의 주소(예: 강남대로, 홍대입구 등)를 입력하기만 하면 됩니다.
-                    지도에서 위치를 확인하고 '분석하기' 버튼을 누르면 수 초 내에 상세한 리포트가 생성됩니다.
-                    카페, 편의점, 치킨집 등 주요 업종의 경쟁 강도를 미리 확인하고 창업 입지를 선정하세요.
-                </p>
-            </section>
+                    <!-- Glossary (SEO Keywords) -->
+                    <section class="bg-blue-50 p-5 rounded-lg border border-blue-100">
+                        <h2 class="text-lg font-bold text-blue-800 mb-3">📖 필수 상권 용어 사전</h2>
+                        <dl class="grid grid-cols-1 md:grid-cols-2 gap-x-6 gap-y-4 text-sm">
+                            <div>
+                                <dt class="font-bold text-gray-800">골목 상권</dt>
+                                <dd class="text-gray-600 mt-1">대로변이 아닌 주택가 이면도로 등에 형성된 소규모 상권으로, 고정적인 배후 수요(거주민)를 가집니다.</dd>
+                            </div>
+                            <div>
+                                <dt class="font-bold text-gray-800">발달 상권</dt>
+                                <dd class="text-gray-600 mt-1">역세권이나 대로변 등 유동인구가 많고 상업 시설이 집중된 지역으로, 권리금과 임대료가 높은 편입니다.</dd>
+                            </div>
+                            <div>
+                                <dt class="font-bold text-gray-800">집객 시설 (Anchor Store)</dt>
+                                <dd class="text-gray-600 mt-1">백화점, 대형마트, 영화관 등 고객을 끌어모으는 힘이 있는 핵심 점포를 의미합니다.</dd>
+                            </div>
+                            <div>
+                                <dt class="font-bold text-gray-800">가시성 (Visibility)</dt>
+                                <dd class="text-gray-600 mt-1">점포가 외부에서 얼마나 잘 보이는지를 나타내는 척도로, 1층 코너 자리가 가시성이 가장 높습니다.</dd>
+                            </div>
+                        </dl>
+                    </section>
+        
+                    <!-- FAQ (Trust) -->
+                    <section>
+                        <h2 class="text-lg font-bold text-gray-800 mb-4">❓ 자주 묻는 질문 (FAQ)</h2>
+                        <div class="space-y-3 text-sm">
+                            <details class="bg-gray-50 rounded-lg p-3 cursor-pointer">
+                                <summary class="font-bold text-gray-700 hover:text-blue-600">Q. 서비스 이용료는 얼마인가요?</summary>
+                                <p class="mt-2 text-gray-600 pl-4 border-l-2 border-blue-200">A. 본 서비스는 100% 무료로 제공됩니다. 별도의 회원가입이나 결제 없이 모든 데이터를 조회할 수 있습니다.</p>
+                            </details>
+                            <details class="bg-gray-50 rounded-lg p-3 cursor-pointer">
+                                <summary class="font-bold text-gray-700 hover:text-blue-600">Q. 데이터는 얼마나 자주 갱신되나요?</summary>
+                                <p class="mt-2 text-gray-600 pl-4 border-l-2 border-blue-200">A. 공공데이터포털의 API 갱신 주기를 따르며, 통상적으로 분기별 또는 반기별로 최신 데이터가 반영되는 편입니다.</p>
+                            </details>
+                            <details class="bg-gray-50 rounded-lg p-3 cursor-pointer">
+                                <summary class="font-bold text-gray-700 hover:text-blue-600">Q. 모바일에서도 이용할 수 있나요?</summary>
+                                <p class="mt-2 text-gray-600 pl-4 border-l-2 border-blue-200">A. 네, 반응형 웹으로 제작되어 스마트폰, 태블릿, PC 등 모든 기기에서 최적화된 화면으로 이용 가능합니다.</p>
+                            </details>
+                        </div>
+                    </section>
+                </div>
+            </details>
         </div>
     </div>
+
+    <!-- Footer (Static) -->
+    <footer class="bg-[#f8fafc] pb-8 text-center text-gray-400 text-xs">
+         <div class="max-w-6xl mx-auto px-4 border-t border-gray-200 pt-6">
+            <div class="flex justify-center gap-4 mb-2">
+                <a href="/privacy.html" class="hover:text-gray-600 underline">개인정보처리방침</a>
+                <span class="text-gray-300">|</span>
+                <a href="/privacy.html" class="hover:text-gray-600 underline">이용약관</a>
+            </div>
+            <p>&copy; 2026 상권분석 앱. All rights reserved.</p>
+            <p class="mt-1">데이터 출처: 공공데이터포털(Data.go.kr), V-World, SGIS</p>
+         </div>
+    </footer>
+
     <script type="module" src="/index.tsx"></script>
 </body>
 </html>

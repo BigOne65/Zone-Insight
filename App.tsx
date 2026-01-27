@@ -323,7 +323,7 @@ const App: React.FC = () => {
   };
 
   return (
-    <div className="min-h-screen max-w-6xl mx-auto p-3 md:p-8 flex flex-col" suppressHydrationWarning={true}>
+    <div className="min-h-screen max-w-6xl mx-auto p-3 md:p-8 flex flex-col">
       <div className="flex-grow">
       {/* Header */}
       <header className="mb-10 flex flex-col items-center justify-center gap-4 text-center relative pt-4 md:pt-8">
@@ -839,16 +839,6 @@ const App: React.FC = () => {
 
       </div>
       
-      {/* Footer */}
-      <footer className="mt-12 py-6 border-t border-gray-200 text-center text-gray-400 text-xs">
-         <div className="flex justify-center gap-4 mb-2">
-            <a href="/privacy.html" className="hover:text-gray-600 underline">개인정보처리방침</a>
-            <span className="text-gray-300">|</span>
-            <a href="/privacy.html" className="hover:text-gray-600 underline">이용약관</a>
-         </div>
-         <p>&copy; 2026 상권분석 앱. All rights reserved.</p>
-         <p className="mt-1">데이터 출처: 공공데이터포털(Data.go.kr), V-World, SGIS</p>
-      </footer>
     </div>
   );
 };
