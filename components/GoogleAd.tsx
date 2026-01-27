@@ -29,8 +29,9 @@ const GoogleAd: React.FC<GoogleAdProps> = ({
   const adPushedRef = useRef(false);
   
   // Detect Development Mode (Vite specific)
+  // Check if import.meta and import.meta.env exist to prevent runtime errors
   // @ts-ignore
-  const isDev = import.meta.env.DEV;
+  const isDev = (typeof import.meta !== 'undefined' && import.meta.env) ? import.meta.env.DEV : false;
 
   useEffect(() => {
     // Prevent pushing multiple times for the same component instance

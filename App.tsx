@@ -404,6 +404,9 @@ const App: React.FC = () => {
            {error && <p className="text-red-500 text-sm mt-2">{error}</p>}
         </div>
 
+        {/* AdSense below Search Input */}
+        <GoogleAd slot="4992341640" className="max-w-4xl mx-auto mt-6" />
+
         {/* Content for AdSense Approval (Valuable Inventory) - Vertical Layout */}
         <div className="max-w-4xl mx-auto mt-8 md:mt-12 px-4 animate-fade-in space-y-8">
             <section className="bg-white p-6 rounded-xl border border-gray-100 shadow-sm">
@@ -601,14 +604,14 @@ const App: React.FC = () => {
                              <h4 className="text-sm text-gray-500 font-medium">배달 피크 요일</h4>
                              <p className="text-xl md:text-2xl font-bold text-gray-800 mt-1">{sbizStats.delivery?.day ? `${sbizStats.delivery.day}요일` : "-"}</p>
                              <div className="text-xs text-gray-400 mt-1 flex flex-col items-center">
-                                 <span>월 {sbizStats.delivery?.count}건 ({Number(sbizStats.delivery?.percent).toFixed(1)}%)</span>
+                                 <span>월 평균 {sbizStats.delivery?.count}건 ({Number(sbizStats.delivery?.percent).toFixed(1)}%)</span>
                                  <span className="text-[10px] text-gray-300 mt-0.5">{sbizStats.delivery?.date} 기준</span>
                              </div>
                         </div>
                         {/* 4. Age Rank */}
                         <div className="bg-white p-4 rounded-xl shadow-sm border border-gray-100 flex flex-col items-center text-center">
                              <div className="bg-purple-100 p-2 rounded-full mb-2"><Icons.Star className="w-5 h-5 text-purple-600 fill-purple-600"/></div>
-                             <h4 className="text-sm text-gray-500 font-medium">주 방문 연령층</h4>
+                             <h4 className="text-sm text-gray-500 font-medium">주 방문 연령층(일 평균)</h4>
                              <div className="mt-2 flex flex-col gap-1 w-full px-2">
                                  {sbizStats.ageRank?.map((rank, i) => (
                                      <div key={i} className="flex justify-between items-center text-xs">
