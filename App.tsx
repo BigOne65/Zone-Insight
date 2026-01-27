@@ -590,22 +590,35 @@ const App: React.FC = () => {
                              <div className="bg-yellow-100 p-2 rounded-full mb-2"><Icons.Wallet className="w-5 h-5 text-yellow-600"/></div>
                              <h4 className="text-sm text-gray-500 font-medium">매출 1위 업종</h4>
                              <p className="text-lg md:text-xl font-bold text-gray-800 mt-1 truncate max-w-full px-2">{sbizStats.maxSales?.type || "-"}</p>
-                             <div className="text-xs text-gray-400 mt-1">월 {sbizStats.maxSales?.amount.toLocaleString()}만원 ({sbizStats.maxSales?.percent}%)</div>
+                             <div className="text-xs text-gray-400 mt-1 flex flex-col items-center">
+                                 <span>월 {sbizStats.maxSales?.amount.toLocaleString()}만원 ({sbizStats.maxSales?.percent}%)</span>
+                                 <span className="text-[10px] text-gray-300 mt-0.5">{sbizStats.maxSales?.date} 기준</span>
+                             </div>
                         </div>
                         {/* 3. Delivery */}
                         <div className="bg-white p-4 rounded-xl shadow-sm border border-gray-100 flex flex-col items-center text-center">
                              <div className="bg-green-100 p-2 rounded-full mb-2"><Icons.Truck className="w-5 h-5 text-green-600"/></div>
                              <h4 className="text-sm text-gray-500 font-medium">배달 피크 요일</h4>
                              <p className="text-xl md:text-2xl font-bold text-gray-800 mt-1">{sbizStats.delivery?.day ? `${sbizStats.delivery.day}요일` : "-"}</p>
-                             <div className="text-xs text-gray-400 mt-1">월 {sbizStats.delivery?.count}건 ({sbizStats.delivery?.percent}%)</div>
+                             <div className="text-xs text-gray-400 mt-1 flex flex-col items-center">
+                                 <span>월 {sbizStats.delivery?.count}건 ({sbizStats.delivery?.percent}%)</span>
+                                 <span className="text-[10px] text-gray-300 mt-0.5">{sbizStats.delivery?.date} 기준</span>
+                             </div>
                         </div>
                         {/* 4. Age Rank */}
                         <div className="bg-white p-4 rounded-xl shadow-sm border border-gray-100 flex flex-col items-center text-center">
                              <div className="bg-purple-100 p-2 rounded-full mb-2"><Icons.Star className="w-5 h-5 text-purple-600 fill-purple-600"/></div>
                              <h4 className="text-sm text-gray-500 font-medium">주 방문 연령층</h4>
-                             <div className="mt-1 flex flex-col gap-0.5">
-                                 <div className="text-sm font-bold text-gray-800">1위: <span className="text-purple-600">{sbizStats.ageRank?.first.age || "-"}</span></div>
-                                 <div className="text-xs text-gray-500">2위: {sbizStats.ageRank?.second.age || "-"}</div>
+                             <div className="mt-2 flex flex-col gap-1 w-full px-2">
+                                 {sbizStats.ageRank?.map((rank, i) => (
+                                     <div key={i} className="flex justify-between items-center text-xs">
+                                         <span className={`${i === 0 ? 'font-bold text-purple-600' : 'text-gray-600'}`}>
+                                            {i+1}위 {rank.age}
+                                         </span>
+                                         <span className="text-gray-400">{rank.count.toLocaleString()}명</span>
+                                     </div>
+                                 ))}
+                                 {(!sbizStats.ageRank || sbizStats.ageRank.length === 0) && <span className="text-xs text-gray-400">-</span>}
                              </div>
                         </div>
                      </div>

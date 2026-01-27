@@ -509,15 +509,13 @@ export const fetchSbizData = async (dongCd: string): Promise<SbizStats> => {
             };
         }
 
-        // 4. 방문 연령 (VstAgeRnk) - Sort to find Rank 1 & 2
+        // 4. 방문 연령 (VstAgeRnk) - Sort to find Rank 1~5
         if (ageRankRes && Array.isArray(ageRankRes.data)) {
             const sorted = [...ageRankRes.data].sort((a: any, b: any) => b.pipcnt - a.pipcnt);
-            if (sorted.length > 0) {
-                result.ageRank = {
-                    first: { age: formatAge(sorted[0].age), count: sorted[0].pipcnt },
-                    second: sorted.length > 1 ? { age: formatAge(sorted[1].age), count: sorted[1].pipcnt } : { age: '-', count: 0 }
-                };
-            }
+            result.ageRank = sorted.slice(0, 5).map(item => ({
+                age: formatAge(item.age),
+                count: item.pipcnt
+            }));
         }
 
         return result;

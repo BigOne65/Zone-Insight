@@ -84,8 +84,5 @@ export interface SbizStats {
     percent: number;
     date: string;
   } | null;
-  ageRank: {
-    first: { age: string; count: number };
-    second: { age: string; count: number };
-  } | null;
+  ageRank: Array<{ age: string; count: number }> | null;
 }
