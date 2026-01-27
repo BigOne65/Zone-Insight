@@ -466,9 +466,7 @@ const App: React.FC = () => {
 
             <section className="bg-gray-50 p-4 rounded-xl border border-gray-100">
                 <p className="text-xs text-gray-500 leading-relaxed text-center">
-                    * 본 서비스는 API로 데이터를 호출하여 보여줍니다. <br/>
-                    * 데이터 갱신 시점에 따라 실제 현황과 일부 차이가 있을 수 있습니다.<br/>
-                    * 주소 검색은 국토교통부 V-World API를 활용합니다.
+                    * 본 서비스는 API로 데이터를 호출하므로, 갱신 시점에 따라 실제 현황과 다소 차이가 있을 수 있습니다.
                 </p>
             </section>
         </div>
@@ -852,8 +850,8 @@ const App: React.FC = () => {
             <span className="text-gray-300">|</span>
             <button onClick={() => setIsPrivacyOpen(true)} className="hover:text-gray-600 underline">이용약관</button>
          </div>
-         <p>&copy; {new Date().getFullYear()} Commercial Area Analysis. All rights reserved.</p>
-         <p className="mt-1">데이터 출처: 공공데이터포털(소상공인시장진흥공단), V-World API</p>
+         <p>&copy; 2026 상권분석 앱. All rights reserved.</p>
+         <p className="mt-1">데이터 출처: 공공데이터포털(Data.go.kr), V-World, SGIS</p>
       </footer>
 
       {/* Privacy Policy Modal */}
