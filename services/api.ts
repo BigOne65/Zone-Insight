@@ -257,71 +257,56 @@ export const fetchStores = async (zoneNo: string, onProgress: (msg: string) => v
     return { stores: allStores, stdrYm };
 };
 
-const fetchBaroApi = async (resId: string, catId: string, extraParams: string = "") => {
-    const serviceKey = getFormattedKey(DATA_API_KEY);
-    const url = `${BASE_URL}/baroApi?resId=${resId}&catId=${catId}&type=json&serviceKey=${serviceKey}${extraParams}`;
-    const text = await fetchWithRetry(url);
-    if (text.trim().startsWith('<')) return [];
+/**
+ * SGIS 좌표 변환 및 리버스 지오코딩 (WGS84 -> UTM-K -> 행정동 추출)
+ * 해당 좌표가 속한 '행정동' 정보를 하나 반환합니다.
+ */
+export const getAdminDistrictByLocation = async (lat: number, lon: number): Promise<Zone> => {
     try {
-        const json = JSON.parse(text);
-        if (json.body?.items) return Array.isArray(json.body.items) ? json.body.items : [json.body.items];
-        if (json.items) return Array.isArray(json.items) ? json.items : [json.items];
-        return [];
-    } catch (e) { return []; }
-};
-
-export const searchAdminDistrict = async (sido: string, sigungu: string, dong: string): Promise<Zone[]> => {
-    if (!DATA_API_KEY) throw new Error("API Key Missing");
-    
-    if (!sido) throw new Error("시/도 정보를 찾을 수 없습니다. (예: 서울특별시, 경기도)");
-
-    const sidos = await fetchBaroApi('dong', 'mega');
-    const targetSido = sidos.find((s: any) => s.ctprvnNm.includes(sido) || sido.includes(s.ctprvnNm));
-    
-    if (!targetSido) throw new Error(`행정구역(시도)을 찾을 수 없습니다: ${sido}`);
-    
-    let adminZones: Zone[] = [];
-
-    if (sigungu) {
-        const sigungus = await fetchBaroApi('dong', 'cty', `&ctprvnCd=${targetSido.ctprvnCd}`);
-        const targetSigungu = sigungus.find((s: any) => s.signguNm.includes(sigungu) || sigungu.includes(s.signguNm));
+        const token = await getSgisToken();
         
-        if (targetSigungu) {
-            const dongs = await fetchBaroApi('dong', 'admi', `&signguCd=${targetSigungu.signguCd}`);
-            let filteredDongs = dongs;
+        // 1. WGS84 (Lat/Lon) -> UTM-K (SGIS Default) 변환
+        let utmkX = 0;
+        let utmkY = 0;
+
+        if (typeof proj4 !== 'undefined') {
+             const [x, y] = proj4(PROJ_WGS84, PROJ_5179, [lon, lat]);
+             utmkX = x;
+             utmkY = y;
+        } else {
+             throw new Error("좌표 변환 라이브러리(proj4)가 로드되지 않았습니다.");
+        }
+
+        // 2. 리버스 지오코딩 요청 (addr_type=21: 행정동)
+        const url = `${SGIS_BASE_URL}/addr/rgeocode.json?accessToken=${token}&x_coor=${utmkX}&y_coor=${utmkY}&addr_type=21`;
+        
+        const resStr = await fetchWithRetry(url);
+        const resData = JSON.parse(resStr);
+
+        if (resData.errCd === 0 && resData.result && resData.result.length > 0) {
+            const item = resData.result[0];
+            // item structure: { sidonm, sggnm, adm_nm (full), adm_cd, leg_nm ... }
+            // adm_nm example: "서울특별시 서초구 서초3동"
             
-            if (dong) {
-                const cleanDong = dong.replace(/[0-9.]+|동$/g, "").trim();
-                const matches = dongs.filter((d: any) => {
-                     const cleanAdong = d.adongNm.replace(/[0-9.]+|동$/g, "").trim();
-                     return d.adongNm.includes(dong) || (cleanDong.length > 0 && cleanAdong === cleanDong);
-                });
-
-                if (matches.length > 0) {
-                    filteredDongs = matches;
-                }
-            }
-
-            adminZones = filteredDongs.map((d: any) => ({
-                trarNo: d.adongCd,
-                mainTrarNm: `${targetSido.ctprvnNm} ${targetSigungu.signguNm} ${d.adongNm}`,
-                ctprvnNm: targetSido.ctprvnNm,
-                signguNm: targetSigungu.signguNm,
+            const fullName = item.full_addr || `${item.sido_nm} ${item.sgg_nm} ${item.adm_nm}`;
+            
+            return {
+                trarNo: item.adm_cd,
+                mainTrarNm: fullName,
+                ctprvnNm: item.sido_nm,
+                signguNm: item.sgg_nm,
                 trarArea: "0",
                 coords: "",
                 type: 'admin',
-                adminCode: d.adongCd,
-                adminLevel: 'adongCd'
-            }));
+                adminCode: item.adm_cd,
+                adminLevel: 'adongCd' // Reverse geocoding usually returns the finest level (Dong)
+            };
         } else {
-             throw new Error(`행정구역(시군구)을 찾을 수 없습니다: ${sigungu}`);
+            throw new Error("해당 위치의 행정동 정보를 찾을 수 없습니다.");
         }
-    } else {
-        throw new Error("시군구 단위까지 정보가 필요합니다. (예: 서울 강남구)");
+    } catch (e: any) {
+        throw new Error(`행정동 검색 실패: ${e.message}`);
     }
-
-    if (adminZones.length === 0) throw new Error("해당 조건에 맞는 행정동을 찾을 수 없습니다.");
-    return adminZones;
 };
 
 export const fetchLocalAdminPolygon = async (zone: Zone): Promise<number[][][]> => {
@@ -334,17 +319,22 @@ export const fetchLocalAdminPolygon = async (zone: Zone): Promise<number[][][]> 
         console.log(`[SGIS] 행정구역 경계 데이터 요청: ${zone.mainTrarNm}`);
         const token = await getSgisToken();
         
-        const geoUrl = `${SGIS_BASE_URL}/addr/geocode.json?accessToken=${token}&address=${encodeURIComponent(zone.mainTrarNm)}`;
-        
-        let geoResStr = await fetchWithRetry(geoUrl);
-        const geoData = JSON.parse(geoResStr);
-        
-        let admCd = "";
-        if (geoData.errCd === 0 && geoData.result?.resultdata?.length > 0) {
-            admCd = geoData.result.resultdata[0].adm_cd;
-        } else {
-            console.warn(`[SGIS] 주소 검색 실패: ${zone.mainTrarNm}`);
-            return [];
+        // Use the admin code directly if available
+        let admCd = zone.adminCode;
+
+        // If no admin code, try to find it via geocode (legacy fallback)
+        if (!admCd) {
+            const geoUrl = `${SGIS_BASE_URL}/addr/geocode.json?accessToken=${token}&address=${encodeURIComponent(zone.mainTrarNm)}`;
+            let geoResStr = await fetchWithRetry(geoUrl);
+            const geoData = JSON.parse(geoResStr);
+            if (geoData.errCd === 0 && geoData.result?.resultdata?.length > 0) {
+                admCd = geoData.result.resultdata[0].adm_cd;
+            }
+        }
+
+        if (!admCd) {
+             console.warn(`[SGIS] 행정동 코드를 찾을 수 없습니다: ${zone.mainTrarNm}`);
+             return [];
         }
 
         // SGIS API requires 'year' parameter (2000~2025)

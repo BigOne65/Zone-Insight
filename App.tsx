@@ -3,7 +3,7 @@ import { PieChart, Pie, Cell, BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveCo
 import * as Icons from './components/Icons';
 import TradeMap from './components/Map';
 import GoogleAd from './components/GoogleAd';
-import { searchAddress, searchZones, fetchStores, searchAdminDistrict, fetchStoresInAdmin, fetchLocalAdminPolygon } from './services/api';
+import { searchAddress, searchZones, fetchStores, getAdminDistrictByLocation, fetchStoresInAdmin, fetchLocalAdminPolygon } from './services/api';
 import { Zone, Store, StoreStats } from './types';
 
 // Constants
@@ -90,6 +90,21 @@ const App: React.FC = () => {
   const [selectedBuildingIndex, setSelectedBuildingIndex] = useState<number | null>(null);
   const [detailedAnalysisFilter, setDetailedAnalysisFilter] = useState<string | null>(null);
 
+  // Load AdSense Script Dynamically
+  useEffect(() => {
+    // @ts-ignore
+    // Safely access env to avoid undefined error
+    const adsenseId = import.meta.env?.VITE_GOOGLE_ADSENSE_ID;
+    if (adsenseId && !document.getElementById('google-adsense-script')) {
+        const script = document.createElement('script');
+        script.id = 'google-adsense-script';
+        script.src = `https://pagead2.googlesyndication.com/pagead/js/adsbygoogle.js?client=${adsenseId}`;
+        script.async = true;
+        script.crossOrigin = "anonymous";
+        document.head.appendChild(script);
+    }
+  }, []);
+
   const handleGeocode = async () => {
     if (!address) { setError("주소를 입력해주세요."); return; }
     setLoading(true); setLoadingMsg("주소 위치를 확인하고 있습니다..."); setError(null);
@@ -122,35 +137,27 @@ const App: React.FC = () => {
           }));
           setFoundZones(enhancedZones);
       } else {
-          setLoadingMsg("해당 주소의 행정구역(동) 정보를 조회하고 있습니다...");
-          const addrParts = resolvedAddress.split(" ");
+          setLoadingMsg("해당 위치의 행정동 정보를 조회하고 있습니다...");
           
-          // Extract Dong from parentheses if present (e.g., "... (역삼동)")
-          const dongMatch = resolvedAddress.match(/\(([^)]+)\)$/);
-          const explicitDong = dongMatch ? dongMatch[1] : (addrParts.slice(2).join(" ") || "");
-          
-          const zones = await searchAdminDistrict(addrParts[0] || "", addrParts[1] || "", explicitDong);
+          // Use coordinate-based reverse geocoding via standard SGIS API
+          const adminZone = await getAdminDistrictByLocation(searchCoords.lat, searchCoords.lon);
           
           setLoadingMsg("행정구역 경계 데이터(Polygon)를 불러오는 중입니다...");
           
-          // Fetch polygons for all found admin zones
-          const enhancedZones = await Promise.all(zones.map(async (z) => {
-              const baseZone = {
-                  ...z,
-                  searchLat: searchCoords.lat,
-                  searchLon: searchCoords.lon,
-                  type: 'admin' as const
-              };
-              try {
-                  const polygon = await fetchLocalAdminPolygon(baseZone);
-                  return { ...baseZone, parsedPolygon: polygon };
-              } catch (e) {
-                  console.warn(`Failed to load polygon for ${z.mainTrarNm}`, e);
-                  return { ...baseZone, parsedPolygon: [] };
-              }
-          }));
-          
-          setFoundZones(enhancedZones);
+          const baseZone = {
+              ...adminZone,
+              searchLat: searchCoords.lat,
+              searchLon: searchCoords.lon,
+              type: 'admin' as const
+          };
+
+          try {
+              const polygon = await fetchLocalAdminPolygon(baseZone);
+              setFoundZones([{ ...baseZone, parsedPolygon: polygon }]);
+          } catch (e) {
+              console.warn(`Failed to load polygon for ${baseZone.mainTrarNm}`, e);
+              setFoundZones([{ ...baseZone, parsedPolygon: [] }]);
+          }
       }
       setStep('select_zone');
     } catch (err: any) {
