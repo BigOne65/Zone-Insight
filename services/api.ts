@@ -29,7 +29,8 @@ const SGIS_SECRET = getEnvVar("VITE_SGIS_SECRET_KEY");
 // API Endpoints
 const BASE_URL = "https://apis.data.go.kr/B553077/api/open/sdsc2";
 const VWORLD_BASE_URL = "https://api.vworld.kr/req/search";
-const SGIS_BASE_URL = "https://sgisapi.kostat.go.kr/OpenAPI3";
+// Update Base URL to mods.go.kr
+const SGIS_BASE_URL = "https://sgisapi.mods.go.kr/OpenAPI3";
 
 // --- Cache ---
 const polygonCache = new Map<string, number[][][]>();
