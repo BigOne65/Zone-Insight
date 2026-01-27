@@ -65,3 +65,27 @@ export interface StoreStats {
   franchiseRate: string;
   summaryTableData: SummaryData[];
 }
+
+// Sbiz API Data Types
+export interface SbizStats {
+  population: {
+    total: string;
+    date: string;
+  } | null;
+  maxSales: {
+    type: string;
+    amount: number;
+    percent: number;
+    date: string;
+  } | null;
+  delivery: {
+    day: string;
+    count: number;
+    percent: number;
+    date: string;
+  } | null;
+  ageRank: {
+    first: { age: string; count: number };
+    second: { age: string; count: number };
+  } | null;
+}

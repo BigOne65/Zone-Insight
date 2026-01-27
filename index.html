@@ -81,18 +81,18 @@
         접고 펼칠 수 있는 형태(<details>)로 구성되어 사용자 경험을 해치지 않으면서 검색엔진 봇에게 정보를 제공합니다.
     -->
     <div class="w-full bg-[#f8fafc] pb-8">
-        <div class="max-w-6xl mx-auto px-4 md:px-8 mt-4">
+        <div class="max-w-6xl mx-auto px-4 md:px-8 mt-4 space-y-4">
+            
+            <!-- 1. 서비스 소개 및 용어 사전 -->
             <details class="bg-white rounded-xl shadow-sm border border-gray-200 overflow-hidden group">
                 <summary class="flex items-center justify-between p-4 cursor-pointer list-none hover:bg-gray-50 transition-colors select-none">
                     <div class="flex items-center gap-3">
                         <div class="bg-blue-100 p-2 rounded-lg text-blue-600">
-                            <!-- Info Icon -->
                             <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"></circle><line x1="12" y1="16" x2="12" y2="12"></line><line x1="12" y1="8" x2="12.01" y2="8"></line></svg>
                         </div>
-                        <span class="font-bold text-gray-700 text-sm md:text-base">서비스 상세 소개 및 상권 분석 가이드 (더보기)</span>
+                        <span class="font-bold text-gray-700 text-sm md:text-base">서비스 상세 소개 및 필수 용어 사전 (더보기)</span>
                     </div>
                     <div class="text-gray-400 transform transition-transform duration-300 group-open:rotate-180">
-                        <!-- Chevron Down -->
                         <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="6 9 12 15 18 9"></polyline></svg>
                     </div>
                 </summary>
@@ -119,25 +119,6 @@
                         </div>
                     </section>
 
-                    <!-- Analysis Guide (New Content for Value) -->
-                    <section>
-                        <h2 class="text-lg font-bold text-gray-800 mb-4 pb-2 border-b border-gray-100">💡 초보 창업자를 위한 상권 데이터 활용 가이드</h2>
-                        <ul class="space-y-4">
-                            <li>
-                                <strong class="text-blue-600 block mb-1">Step 1. 경쟁 강도 파악하기</strong>
-                                내가 창업하려는 아이템(예: 카페)이 해당 상권에 몇 개나 있는지 확인하세요. '세부 업종 Top 10' 차트에서 동종 업계 점포 수가 지나치게 많다면 진입 장벽이 높을 수 있습니다.
-                            </li>
-                            <li>
-                                <strong class="text-blue-600 block mb-1">Step 2. 1층 점포 비율 확인하기</strong>
-                                '1층 점포 비율'이 높다는 것은 유동인구의 접근성이 좋고 임대료가 상대적으로 높게 형성된 상권임을 의미합니다. 반면 비율이 낮다면 목적형 소비(예: 학원, 병원, 오피스) 중심일 가능성이 높습니다.
-                            </li>
-                            <li>
-                                <strong class="text-blue-600 block mb-1">Step 3. 상권의 성격 규명하기</strong>
-                                행정구역(동) 단위 분석과 주요 상권(상가 밀집 구역) 단위 분석을 비교해보세요. 주거 밀집 지역과 오피스 상권은 소비 패턴이 완전히 다르므로 타겟 고객층을 명확히 설정해야 합니다.
-                            </li>
-                        </ul>
-                    </section>
-
                     <!-- Glossary (SEO Keywords) -->
                     <section class="bg-blue-50 p-5 rounded-lg border border-blue-100">
                         <h2 class="text-lg font-bold text-blue-800 mb-3">📖 필수 상권 용어 사전</h2>
@@ -160,10 +141,59 @@
                             </div>
                         </dl>
                     </section>
-        
-                    <!-- FAQ (Trust) -->
+                </div>
+            </details>
+
+            <!-- 2. 가이드 -->
+            <details class="bg-white rounded-xl shadow-sm border border-gray-200 overflow-hidden group">
+                <summary class="flex items-center justify-between p-4 cursor-pointer list-none hover:bg-gray-50 transition-colors select-none">
+                    <div class="flex items-center gap-3">
+                        <div class="bg-yellow-100 p-2 rounded-lg text-yellow-600">
+                            <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2"></polygon></svg>
+                        </div>
+                        <span class="font-bold text-gray-700 text-sm md:text-base">💡 초보 창업자를 위한 상권 데이터 활용 가이드 (더보기)</span>
+                    </div>
+                    <div class="text-gray-400 transform transition-transform duration-300 group-open:rotate-180">
+                        <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="6 9 12 15 18 9"></polyline></svg>
+                    </div>
+                </summary>
+                
+                <div class="p-6 border-t border-gray-100 text-gray-600 leading-relaxed text-sm md:text-base animate-fade-in">
                     <section>
-                        <h2 class="text-lg font-bold text-gray-800 mb-4">❓ 자주 묻는 질문 (FAQ)</h2>
+                        <ul class="space-y-4">
+                            <li>
+                                <strong class="text-blue-600 block mb-1">Step 1. 경쟁 강도 파악하기</strong>
+                                내가 창업하려는 아이템(예: 카페)이 해당 상권에 몇 개나 있는지 확인하세요. '세부 업종 Top 10' 차트에서 동종 업계 점포 수가 지나치게 많다면 진입 장벽이 높을 수 있습니다.
+                            </li>
+                            <li>
+                                <strong class="text-blue-600 block mb-1">Step 2. 1층 점포 비율 확인하기</strong>
+                                '1층 점포 비율'이 높다는 것은 유동인구의 접근성이 좋고 임대료가 상대적으로 높게 형성된 상권임을 의미합니다. 반면 비율이 낮다면 목적형 소비(예: 학원, 병원, 오피스) 중심일 가능성이 높습니다.
+                            </li>
+                            <li>
+                                <strong class="text-blue-600 block mb-1">Step 3. 상권의 성격 규명하기</strong>
+                                행정구역(동) 단위 분석과 주요 상권(상가 밀집 구역) 단위 분석을 비교해보세요. 주거 밀집 지역과 오피스 상권은 소비 패턴이 완전히 다르므로 타겟 고객층을 명확히 설정해야 합니다.
+                            </li>
+                        </ul>
+                    </section>
+                </div>
+            </details>
+
+            <!-- 3. FAQ -->
+            <details class="bg-white rounded-xl shadow-sm border border-gray-200 overflow-hidden group">
+                <summary class="flex items-center justify-between p-4 cursor-pointer list-none hover:bg-gray-50 transition-colors select-none">
+                    <div class="flex items-center gap-3">
+                        <div class="bg-green-100 p-2 rounded-lg text-green-600">
+                             <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"></circle><path d="M9.09 9a3 3 0 0 1 5.83 1c0 2-3 3-3 3"></path><line x1="12" y1="17" x2="12.01" y2="17"></line></svg>
+                        </div>
+                        <span class="font-bold text-gray-700 text-sm md:text-base">❓ 자주 묻는 질문 (FAQ) (더보기)</span>
+                    </div>
+                    <div class="text-gray-400 transform transition-transform duration-300 group-open:rotate-180">
+                        <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="6 9 12 15 18 9"></polyline></svg>
+                    </div>
+                </summary>
+                
+                <div class="p-6 border-t border-gray-100 text-gray-600 leading-relaxed text-sm md:text-base animate-fade-in">
+                    <section>
                         <div class="space-y-3 text-sm">
                             <details class="bg-gray-50 rounded-lg p-3 cursor-pointer">
                                 <summary class="font-bold text-gray-700 hover:text-blue-600">Q. 서비스 이용료는 얼마인가요?</summary>
@@ -181,6 +211,7 @@
                     </section>
                 </div>
             </details>
+
         </div>
     </div>
 

@@ -1,4 +1,4 @@
-import { Zone, Store } from '../types';
+import { Zone, Store, SbizStats } from '../types';
 
 // Declare proj4 global
 declare const proj4: any;
@@ -448,4 +448,82 @@ export const fetchStoresInAdmin = async (adminCode: string, divId: string, onPro
         }
     }
     return { stores: allStores, stdrYm };
+};
+
+export const fetchSbizData = async (dongCd: string): Promise<SbizStats> => {
+    const SBIZ_BASE_URL = "https://bigdata.sbiz.or.kr/sbiz/api/bizonSttus";
+    const endpoints = {
+        maxSales: `${SBIZ_BASE_URL}/MaxSlsBiz/search.json?dongCd=${dongCd}`,
+        delivery: `${SBIZ_BASE_URL}/DlvyDay/search.json?dongCd=${dongCd}`,
+        ageRank: `${SBIZ_BASE_URL}/VstAgeRnk/search.json?dongCd=${dongCd}`,
+        population: `${SBIZ_BASE_URL}/cfrDynppl/search.json?dongCd=${dongCd}`
+    };
+
+    try {
+        const [maxSalesRes, deliveryRes, ageRankRes, populationRes] = await Promise.all([
+            fetchWithRetry(endpoints.maxSales).then(t => JSON.parse(t)).catch(() => null),
+            fetchWithRetry(endpoints.delivery).then(t => JSON.parse(t)).catch(() => null),
+            fetchWithRetry(endpoints.ageRank).then(t => JSON.parse(t)).catch(() => null),
+            fetchWithRetry(endpoints.population).then(t => JSON.parse(t)).catch(() => null)
+        ]);
+
+        const formatAge = (ageCode: string) => {
+             // M60 -> 60대, M40 -> 40대...
+             if(!ageCode) return "정보없음";
+             const ageNum = ageCode.replace(/[^0-9]/g, '');
+             return ageNum ? `${ageNum}대` : ageCode;
+        };
+
+        const result: SbizStats = {
+            population: null,
+            maxSales: null,
+            delivery: null,
+            ageRank: null
+        };
+
+        // 1. 유동인구 (cfrDynppl)
+        if (populationRes && populationRes.data) {
+            result.population = {
+                total: parseInt(populationRes.data.ppltn || "0").toLocaleString(),
+                date: populationRes.data.crtrYm
+            };
+        }
+
+        // 2. 최대 매출 업종 (MaxSlsBiz)
+        if (maxSalesRes && maxSalesRes.data) {
+            result.maxSales = {
+                type: maxSalesRes.data.tpbizClscdNm,
+                amount: maxSalesRes.data.mmTotSlsAmt, // 단위: 만원
+                percent: maxSalesRes.data.mmTotSlsAmtPercent,
+                date: maxSalesRes.data.crtrYm
+            };
+        }
+
+        // 3. 배달 (DlvyDay)
+        if (deliveryRes && deliveryRes.data) {
+            result.delivery = {
+                day: deliveryRes.data.days,
+                count: deliveryRes.data.totAmt,
+                percent: deliveryRes.data.percent,
+                date: deliveryRes.data.crtrYm
+            };
+        }
+
+        // 4. 방문 연령 (VstAgeRnk) - Sort to find Rank 1 & 2
+        if (ageRankRes && Array.isArray(ageRankRes.data)) {
+            const sorted = [...ageRankRes.data].sort((a: any, b: any) => b.pipcnt - a.pipcnt);
+            if (sorted.length > 0) {
+                result.ageRank = {
+                    first: { age: formatAge(sorted[0].age), count: sorted[0].pipcnt },
+                    second: sorted.length > 1 ? { age: formatAge(sorted[1].age), count: sorted[1].pipcnt } : { age: '-', count: 0 }
+                };
+            }
+        }
+
+        return result;
+
+    } catch (e) {
+        console.warn("Sbiz Data Fetch Error:", e);
+        return { population: null, maxSales: null, delivery: null, ageRank: null };
+    }
 };

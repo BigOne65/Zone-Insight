@@ -3,8 +3,8 @@ import { PieChart, Pie, Cell, BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveCo
 import * as Icons from './components/Icons';
 import TradeMap from './components/Map';
 import GoogleAd from './components/GoogleAd';
-import { searchAddress, searchZones, fetchStores, searchAdminDistrict, fetchStoresInAdmin, fetchLocalAdminPolygon } from './services/api';
-import { Zone, Store, StoreStats } from './types';
+import { searchAddress, searchZones, fetchStores, searchAdminDistrict, fetchStoresInAdmin, fetchLocalAdminPolygon, fetchSbizData } from './services/api';
+import { Zone, Store, StoreStats, SbizStats } from './types';
 
 // Constants
 const COLORS = ['#3b82f6', '#10b981', '#f59e0b', '#ef4444', '#8b5cf6', '#ec4899'];
@@ -76,6 +76,7 @@ const App: React.FC = () => {
   const [previewZone, setPreviewZone] = useState<Zone | null>(null);
   
   const [storeStats, setStoreStats] = useState<StoreStats | null>(null);
+  const [sbizStats, setSbizStats] = useState<SbizStats | null>(null);
   const [topStores, setTopStores] = useState<Store[]>([]);
   const [allRawStores, setAllRawStores] = useState<Store[]>([]);
   const [dataDate, setDataDate] = useState<string | null>(null);
@@ -167,15 +168,21 @@ const App: React.FC = () => {
     setSelectedLarge(null); setSelectedMid(null);
     setSelectedBuildingIndex(null);
     setDetailedAnalysisFilter(null);
+    setSbizStats(null);
 
     try {
       let stores: Store[] = [];
       let stdrYm = "";
 
       if (selectedZone.type === 'admin' && selectedZone.adminCode && selectedZone.adminLevel) {
-          const result = await fetchStoresInAdmin(selectedZone.adminCode, selectedZone.adminLevel, (msg) => setLoadingMsg(msg));
-          stores = result.stores;
-          stdrYm = result.stdrYm;
+          // Parallel fetch for stores and extra sbiz data if in admin mode
+          const [storeResult, sbizResult] = await Promise.all([
+             fetchStoresInAdmin(selectedZone.adminCode, selectedZone.adminLevel, (msg) => setLoadingMsg(msg)),
+             fetchSbizData(selectedZone.adminCode)
+          ]);
+          stores = storeResult.stores;
+          stdrYm = storeResult.stdrYm;
+          setSbizStats(sbizResult);
       } else {
           const result = await fetchStores(selectedZone.trarNo, (msg) => setLoadingMsg(msg));
           stores = result.stores;
@@ -318,7 +325,7 @@ const App: React.FC = () => {
 
   const reset = () => {
       setStep("input"); setAddress(""); setFoundZones([]); setTradeZone(null); 
-      setAllRawStores([]); setStoreStats(null); setDataDate(null);
+      setAllRawStores([]); setStoreStats(null); setSbizStats(null); setDataDate(null);
       setSelectedBuildingIndex(null); setDetailedAnalysisFilter(null);
   };
 
@@ -398,7 +405,7 @@ const App: React.FC = () => {
         </div>
 
         {/* Content for AdSense Approval (Valuable Inventory) - Vertical Layout */}
-        <div className="max-w-3xl mx-auto mt-8 md:mt-12 px-4 animate-fade-in space-y-8">
+        <div className="max-w-4xl mx-auto mt-8 md:mt-12 px-4 animate-fade-in space-y-8">
             <section className="bg-white p-6 rounded-xl border border-gray-100 shadow-sm">
                 <h3 className="text-xl font-bold text-gray-800 mb-3 flex items-center gap-2">
                     <span className="bg-blue-100 text-blue-600 p-1.5 rounded-lg"><Icons.MapPin className="w-5 h-5"/></span>
@@ -567,6 +574,42 @@ const App: React.FC = () => {
                         />
                     </div>
                  </div>
+
+                 {/* Sbiz Stats Section (Only for Admin Zone) */}
+                 {tradeZone.type === 'admin' && sbizStats && (
+                     <div className="grid grid-cols-2 md:grid-cols-4 gap-4 animate-fade-in">
+                        {/* 1. Population */}
+                        <div className="bg-white p-4 rounded-xl shadow-sm border border-gray-100 flex flex-col items-center text-center">
+                             <div className="bg-blue-100 p-2 rounded-full mb-2"><Icons.Users className="w-5 h-5 text-blue-600"/></div>
+                             <h4 className="text-sm text-gray-500 font-medium">일 평균 유동인구</h4>
+                             <p className="text-xl md:text-2xl font-bold text-gray-800 mt-1">{sbizStats.population?.total || "-"}</p>
+                             <span className="text-xs text-gray-400 mt-1">{sbizStats.population?.date || ""} 기준</span>
+                        </div>
+                        {/* 2. Max Revenue */}
+                        <div className="bg-white p-4 rounded-xl shadow-sm border border-gray-100 flex flex-col items-center text-center">
+                             <div className="bg-yellow-100 p-2 rounded-full mb-2"><Icons.Wallet className="w-5 h-5 text-yellow-600"/></div>
+                             <h4 className="text-sm text-gray-500 font-medium">매출 1위 업종</h4>
+                             <p className="text-lg md:text-xl font-bold text-gray-800 mt-1 truncate max-w-full px-2">{sbizStats.maxSales?.type || "-"}</p>
+                             <div className="text-xs text-gray-400 mt-1">월 {sbizStats.maxSales?.amount.toLocaleString()}만원 ({sbizStats.maxSales?.percent}%)</div>
+                        </div>
+                        {/* 3. Delivery */}
+                        <div className="bg-white p-4 rounded-xl shadow-sm border border-gray-100 flex flex-col items-center text-center">
+                             <div className="bg-green-100 p-2 rounded-full mb-2"><Icons.Truck className="w-5 h-5 text-green-600"/></div>
+                             <h4 className="text-sm text-gray-500 font-medium">배달 피크 요일</h4>
+                             <p className="text-xl md:text-2xl font-bold text-gray-800 mt-1">{sbizStats.delivery?.day ? `${sbizStats.delivery.day}요일` : "-"}</p>
+                             <div className="text-xs text-gray-400 mt-1">월 {sbizStats.delivery?.count}건 ({sbizStats.delivery?.percent}%)</div>
+                        </div>
+                        {/* 4. Age Rank */}
+                        <div className="bg-white p-4 rounded-xl shadow-sm border border-gray-100 flex flex-col items-center text-center">
+                             <div className="bg-purple-100 p-2 rounded-full mb-2"><Icons.Star className="w-5 h-5 text-purple-600 fill-purple-600"/></div>
+                             <h4 className="text-sm text-gray-500 font-medium">주 방문 연령층</h4>
+                             <div className="mt-1 flex flex-col gap-0.5">
+                                 <div className="text-sm font-bold text-gray-800">1위: <span className="text-purple-600">{sbizStats.ageRank?.first.age || "-"}</span></div>
+                                 <div className="text-xs text-gray-500">2위: {sbizStats.ageRank?.second.age || "-"}</div>
+                             </div>
+                        </div>
+                     </div>
+                 )}
 
                  {/* Summary Cards */}
                  <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
