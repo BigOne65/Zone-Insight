@@ -10,7 +10,8 @@ const PROJ_5179 = "+proj=tmerc +lat_0=38 +lon_0=127.5 +k=0.9996 +x_0=1000000 +y_
 
 /**
  * 환경 변수 로드 헬퍼
- * .env 파일이 없어도 빌드 타임/런타임 환경 변수(Vercel 등)에서 값을 읽어옵니다.
+ * API 키는 Vercel 등 호스팅 서비스의 Environment Variables에서 로드합니다.
+ * (Vite 사용 시 VITE_ 접두사 필수)
  */
 const getEnvVar = (key: string): string => {
     // @ts-ignore
@@ -21,6 +22,7 @@ const getEnvVar = (key: string): string => {
     return "";
 };
 
+// Load Keys from Environment
 const DATA_API_KEY = getEnvVar("VITE_DATA_API_KEY");
 const VWORLD_KEY = getEnvVar("VITE_VWORLD_KEY");
 const SGIS_ID = getEnvVar("VITE_SGIS_SERVICE_ID");
@@ -30,7 +32,6 @@ const SEOUL_DATA_KEY = getEnvVar("VITE_SEOUL_DATA_KEY");
 // API Endpoints
 const BASE_URL = "https://apis.data.go.kr/B553077/api/open/sdsc2";
 const VWORLD_BASE_URL = "https://api.vworld.kr/req/search";
-// Update Base URL to mods.go.kr
 const SGIS_BASE_URL = "https://sgisapi.mods.go.kr/OpenAPI3";
 const SEOUL_BASE_URL = "http://openapi.seoul.go.kr:8088";
 
@@ -39,20 +40,11 @@ const polygonCache = new Map<string, number[][][]>();
 
 // --- Helpers ---
 
-/**
- * API Key 포맷팅
- * 공공데이터포털 키가 Decoding된 상태(+, / 포함)라면 반드시 인코딩해야 함.
- * 이미 Encoding된 상태(% 포함)라면 그대로 사용.
- */
 const getFormattedKey = (key: string) => {
     if (!key) return "";
     return key.includes('%') ? key : encodeURIComponent(key);
 };
 
-/**
- * XML 에러 파싱
- * 공공데이터포털은 에러 발생 시 status 200 OK와 함께 XML 에러 메시지를 반환하는 경우가 많음.
- */
 const parseXmlError = (text: string) => {
     try {
         const parser = new DOMParser();
@@ -93,14 +85,16 @@ const fetchJsonp = (url: string, callbackParam = 'callback'): Promise<any> => {
     });
 };
 
-// Proxy list optimized for speed and reliability
-// api.allorigins.win uses Cloudflare (Anycast), so it usually finds the fastest route (e.g. ICN node).
+/**
+ * 프록시 서버 리스트
+ * 1순위: corsproxy.io (속도가 빠르고 안정적)
+ * 2순위: allorigins.win (범용적이나 가끔 느림)
+ */
 const PROXY_LIST = [
+    (url: string) => `https://corsproxy.io/?${encodeURIComponent(url)}`,
     (url: string) => `https://api.allorigins.win/raw?url=${encodeURIComponent(url)}`,
-    (url: string) => `https://api.codetabs.com/v1/proxy?quest=${encodeURIComponent(url)}`,
 ];
 
-// Track the index of the currently working proxy to avoid retrying failed ones repeatedly
 let currentProxyIndex = 0;
 
 const fetchWithRetry = async (targetUrl: string): Promise<string> => {
@@ -108,23 +102,19 @@ const fetchWithRetry = async (targetUrl: string): Promise<string> => {
     
     // Try up to the number of available proxies
     for (let i = 0; i < PROXY_LIST.length; i++) {
-        // Calculate index starting from the current preferred proxy
         const idx = (currentProxyIndex + i) % PROXY_LIST.length;
         
         try {
             const response = await fetch(PROXY_LIST[idx](targetUrl));
             if (!response.ok) throw new Error(`HTTP status ${response.status}`);
-            
-            // If successful, update the preferred proxy index to this one
             currentProxyIndex = idx;
             return await response.text();
         } catch (e) {
             console.warn(`Proxy ${idx + 1} failed:`, e);
             lastError = e;
-            // Continue to next proxy
         }
     }
-    throw new Error(`모든 프록시 서버 연결 실패: ${lastError}`);
+    throw new Error(`데이터를 불러오는 데 실패했습니다. 잠시 후 다시 시도해주세요. (${lastError})`);
 };
 
 // --- SGIS Helpers ---
@@ -133,13 +123,12 @@ let sgisAccessToken: string | null = null;
 let tokenExpiry: number = 0;
 
 const getSgisToken = async (): Promise<string> => {
-    // Return cached token if valid (buffer 5 mins)
     if (sgisAccessToken && Date.now() < tokenExpiry - 300000) {
         return sgisAccessToken;
     }
 
-    if (!SGIS_ID || !SGIS_SECRET || SGIS_ID.startsWith("YOUR")) {
-        throw new Error("SGIS API Key가 설정되지 않았습니다. 환경 변수를 확인해주세요.");
+    if (!SGIS_ID || !SGIS_SECRET) {
+        throw new Error("SGIS API 키가 설정되지 않았습니다.");
     }
 
     const url = `${SGIS_BASE_URL}/auth/authentication.json?consumer_key=${SGIS_ID}&consumer_secret=${SGIS_SECRET}`;
@@ -165,7 +154,7 @@ const getSgisToken = async (): Promise<string> => {
 // --- API Functions ---
 
 export const searchAddress = async (address: string): Promise<any> => {
-    if (!VWORLD_KEY || VWORLD_KEY.startsWith("YOUR")) throw new Error("V-World API Key가 설정되지 않았습니다.");
+    if (!VWORLD_KEY) throw new Error("V-World API Key가 누락되었습니다.");
     let errorDetails: string[] = [];
     
     const runSearch = async (searchType: string, category?: string) => {
@@ -189,11 +178,11 @@ export const searchAddress = async (address: string): Promise<any> => {
     if (!item) item = await runSearch("PLACE");
     if (item) return item;
     
-    throw new Error(`검색 실패: ${errorDetails.length > 0 ? errorDetails.join(", ") : "결과 없음"}`);
+    throw new Error(`검색 결과가 없습니다.`);
 };
 
 export const searchZones = async (lat: number, lon: number): Promise<Zone[]> => {
-    if (!DATA_API_KEY || DATA_API_KEY.startsWith("YOUR")) throw new Error("공공데이터포털 API Key가 설정되지 않았습니다.");
+    if (!DATA_API_KEY) throw new Error("공공데이터 API Key가 누락되었습니다.");
     const SEARCH_RADIUS = 500;
     
     const serviceKey = getFormattedKey(DATA_API_KEY);
@@ -201,7 +190,6 @@ export const searchZones = async (lat: number, lon: number): Promise<Zone[]> => 
     
     const zoneText = await fetchWithRetry(zoneUrl);
     
-    // Check for XML Error Response
     if (zoneText.trim().startsWith('<')) {
         throw new Error(parseXmlError(zoneText));
     }
@@ -211,11 +199,10 @@ export const searchZones = async (lat: number, lon: number): Promise<Zone[]> => 
         const zoneJson = JSON.parse(zoneText);
         if (zoneJson.body && zoneJson.body.items) {
             zones = Array.isArray(zoneJson.body.items) ? zoneJson.body.items : [zoneJson.body.items];
-            // type: 'trade' 추가
             zones = zones.map((item: any) => ({ ...item, type: 'trade' }));
         }
     } catch (e) {
-        throw new Error("데이터 파싱 실패 (JSON형식이 아닙니다)");
+        throw new Error("상권 데이터 파싱 실패");
     }
     
     if (zones.length === 0) throw new Error("주변 상권 정보가 없습니다.");
@@ -252,13 +239,12 @@ export const fetchStores = async (zoneNo: string, onProgress: (msg: string) => v
     const totalPages = Math.ceil(totalCount / PAGE_SIZE);
     
     if (totalPages > 1) {
-        // Parallel fetching in batches to speed up loading
         const BATCH_SIZE = 6;
         let consecutiveErrors = 0;
 
         for (let i = 2; i <= totalPages; i += BATCH_SIZE) {
             const endPage = Math.min(i + BATCH_SIZE - 1, totalPages);
-            onProgress(`${i}~${endPage} / ${totalPages} 페이지 데이터 고속 수집 중... (병렬 연결)`);
+            onProgress(`${i}~${endPage} / ${totalPages} 페이지 데이터 수집 중...`);
 
             const promises = [];
             for (let page = i; page <= endPage; page++) {
@@ -290,10 +276,7 @@ export const fetchStores = async (zoneNo: string, onProgress: (msg: string) => v
                 });
             }
             
-            if (consecutiveErrors >= 2) {
-                console.warn("연속된 API 호출 실패로 추가 데이터 수집을 중단합니다.");
-                break;
-            }
+            if (consecutiveErrors >= 2) break;
             await new Promise(r => setTimeout(r, 50));
         }
     }
@@ -316,7 +299,7 @@ const fetchBaroApi = async (resId: string, catId: string, extraParams: string = 
 export const searchAdminDistrict = async (sido: string, sigungu: string, dong: string): Promise<Zone[]> => {
     if (!DATA_API_KEY) throw new Error("API Key Missing");
     
-    if (!sido) throw new Error("시/도 정보를 찾을 수 없습니다. (예: 서울특별시, 경기도)");
+    if (!sido) throw new Error("시/도 정보를 찾을 수 없습니다.");
 
     const sidos = await fetchBaroApi('dong', 'mega');
     const targetSido = sidos.find((s: any) => s.ctprvnNm.includes(sido) || sido.includes(s.ctprvnNm));
@@ -360,7 +343,7 @@ export const searchAdminDistrict = async (sido: string, sigungu: string, dong: s
              throw new Error(`행정구역(시군구)을 찾을 수 없습니다: ${sigungu}`);
         }
     } else {
-        throw new Error("시군구 단위까지 정보가 필요합니다. (예: 서울 강남구)");
+        throw new Error("시군구 단위까지 정보가 필요합니다.");
     }
 
     if (adminZones.length === 0) throw new Error("해당 조건에 맞는 행정동을 찾을 수 없습니다.");
@@ -369,12 +352,10 @@ export const searchAdminDistrict = async (sido: string, sigungu: string, dong: s
 
 export const fetchLocalAdminPolygon = async (zone: Zone): Promise<number[][][]> => {
     if (polygonCache.has(zone.mainTrarNm)) {
-        console.log(`[SGIS] 캐시된 경계 데이터 사용: ${zone.mainTrarNm}`);
         return polygonCache.get(zone.mainTrarNm)!;
     }
 
     try {
-        console.log(`[SGIS] 행정구역 경계 데이터 요청: ${zone.mainTrarNm}`);
         const token = await getSgisToken();
         
         const geoUrl = `${SGIS_BASE_URL}/addr/geocode.json?accessToken=${token}&address=${encodeURIComponent(zone.mainTrarNm)}`;
@@ -386,22 +367,17 @@ export const fetchLocalAdminPolygon = async (zone: Zone): Promise<number[][][]> 
         if (geoData.errCd === 0 && geoData.result?.resultdata?.length > 0) {
             admCd = geoData.result.resultdata[0].adm_cd;
         } else {
-            console.warn(`[SGIS] 주소 검색 실패: ${zone.mainTrarNm}`);
             return [];
         }
 
-        // SGIS API requires 'year' parameter (2000~2025)
-        // Automatically use current year (e.g. 2025)
         const currentYear = new Date().getFullYear().toString();
         let boundUrl = `${SGIS_BASE_URL}/boundary/hadmarea.geojson?accessToken=${token}&adm_cd=${admCd}&year=${currentYear}&low_search=0`;
         
         let boundResStr = await fetchWithRetry(boundUrl);
         let boundData = JSON.parse(boundResStr);
 
-        // Fallback: If current year data is missing, try previous year
         if (!boundData.features || boundData.features.length === 0) {
              const prevYear = (new Date().getFullYear() - 1).toString();
-             console.warn(`[SGIS] ${currentYear}년도 데이터 없음, ${prevYear}년도로 재시도`);
              boundUrl = `${SGIS_BASE_URL}/boundary/hadmarea.geojson?accessToken=${token}&adm_cd=${admCd}&year=${prevYear}&low_search=0`;
              boundResStr = await fetchWithRetry(boundUrl);
              boundData = JSON.parse(boundResStr);
@@ -438,7 +414,7 @@ export const fetchLocalAdminPolygon = async (zone: Zone): Promise<number[][][]> 
             }
         }
     } catch (e: any) {
-        console.warn(`[SGIS] API Error: ${e.message}`);
+        console.warn(`[SGIS] Error: ${e.message}`);
     }
     return [];
 };
@@ -473,13 +449,12 @@ export const fetchStoresInAdmin = async (adminCode: string, divId: string, onPro
     const totalPages = Math.ceil(totalCount / PAGE_SIZE);
     
     if (totalPages > 1) {
-        // Parallel fetching for speed
         const BATCH_SIZE = 6;
         let consecutiveErrors = 0;
 
         for (let i = 2; i <= totalPages; i += BATCH_SIZE) {
             const endPage = Math.min(i + BATCH_SIZE - 1, totalPages);
-            onProgress(`${i}~${endPage} / ${totalPages} 페이지 데이터 고속 수집 중... (병렬 연결)`);
+            onProgress(`${i}~${endPage} / ${totalPages} 페이지 데이터 수집 중...`);
 
             const promises = [];
             for (let page = i; page <= endPage; page++) {
@@ -511,10 +486,7 @@ export const fetchStoresInAdmin = async (adminCode: string, divId: string, onPro
                 });
             }
             
-            if (consecutiveErrors >= 2) {
-                console.warn("연속된 API 호출 실패로 추가 데이터 수집을 중단합니다.");
-                break;
-            }
+            if (consecutiveErrors >= 2) break;
             await new Promise(r => setTimeout(r, 50));
         }
     }
@@ -539,7 +511,6 @@ export const fetchSbizData = async (dongCd: string): Promise<SbizStats> => {
         ]);
 
         const formatAge = (ageCode: string) => {
-             // M60 -> 60대, M40 -> 40대...
              if(!ageCode) return "정보없음";
              const ageNum = ageCode.replace(/[^0-9]/g, '');
              return ageNum ? `${ageNum}대` : ageCode;
@@ -552,7 +523,6 @@ export const fetchSbizData = async (dongCd: string): Promise<SbizStats> => {
             ageRank: null
         };
 
-        // 1. 유동인구 (cfrDynppl)
         if (populationRes && populationRes.data) {
             result.population = {
                 total: parseInt(populationRes.data.ppltn || "0").toLocaleString(),
@@ -560,17 +530,15 @@ export const fetchSbizData = async (dongCd: string): Promise<SbizStats> => {
             };
         }
 
-        // 2. 최대 매출 업종 (MaxSlsBiz)
         if (maxSalesRes && maxSalesRes.data) {
             result.maxSales = {
                 type: maxSalesRes.data.tpbizClscdNm,
-                amount: maxSalesRes.data.mmTotSlsAmt, // 단위: 만원
+                amount: maxSalesRes.data.mmTotSlsAmt, 
                 percent: maxSalesRes.data.mmTotSlsAmtPercent,
                 date: maxSalesRes.data.crtrYm
             };
         }
 
-        // 3. 배달 (DlvyDay)
         if (deliveryRes && deliveryRes.data) {
             result.delivery = {
                 day: deliveryRes.data.days,
@@ -580,7 +548,6 @@ export const fetchSbizData = async (dongCd: string): Promise<SbizStats> => {
             };
         }
 
-        // 4. 방문 연령 (VstAgeRnk) - Sort to find Rank 1~5
         if (ageRankRes && Array.isArray(ageRankRes.data)) {
             const sorted = [...ageRankRes.data].sort((a: any, b: any) => b.pipcnt - a.pipcnt);
             result.ageRank = sorted.slice(0, 5).map(item => ({
@@ -597,24 +564,15 @@ export const fetchSbizData = async (dongCd: string): Promise<SbizStats> => {
     }
 };
 
-/**
- * 서울 열린데이터 광장 (행정동별 추정매출) 데이터 조회
- */
 export const fetchSeoulSalesData = async (adminCode: string): Promise<SeoulSalesData | null> => {
-    if (!SEOUL_DATA_KEY || SEOUL_DATA_KEY.startsWith("YOUR")) {
+    if (!SEOUL_DATA_KEY) {
         console.warn("서울 데이터 API 키가 없습니다.");
         return null;
     }
 
-    // 서울시 코드는 10자리 행정동 코드(11xxxxxxx)를 사용하지만, API 호출 시 확인 필요.
-    // VwsmAdstrdSelngW 서비스 호출
-    
-    // 최근 분기 추정 (현재 날짜 기준)
     const now = new Date();
     const currentYear = now.getFullYear();
 
-    // 20254(미래)부터 과거 2년치(8분기)를 후보군으로 설정하여 데이터가 있는 가장 최근 분기 검색
-    // 사용자가 '20254' 등 미래 날짜를 원할 경우를 대비해 올해 4분기부터 시작
     const targetQuarters = [];
     for(let y = currentYear; y >= currentYear - 1; y--) {
         for(let q = 4; q >= 1; q--) {
@@ -623,33 +581,23 @@ export const fetchSeoulSalesData = async (adminCode: string): Promise<SeoulSales
     }
 
     const serviceName = "VwsmAdstrdSelngW";
-    
-    // Aggregate result holder
     let aggregatedData: SeoulSalesData | null = null;
 
     for (const q of targetQuarters) {
-        // Format: KEY/json/Service/Start/End/YearQuarter/AdminCode
         const url = `${SEOUL_BASE_URL}/${SEOUL_DATA_KEY}/json/${serviceName}/1/1000/${q}/${adminCode}`;
         
         try {
             const jsonText = await fetchWithRetry(url);
-            
-            // Error handling for Seoul API
-            // Usually returns JSON like { VwsmAdstrdSelngW: { row: [...] } } or { RESULT: { CODE: ... } }
-            // Some error responses are valid JSON, some might be HTML/XML if key is wrong
-            
             let data: any;
             try {
                 data = JSON.parse(jsonText);
             } catch (e) {
-                console.warn(`Seoul API Parse Error (${q}):`, jsonText);
                 continue; 
             }
 
             if (data.VwsmAdstrdSelngW && data.VwsmAdstrdSelngW.row) {
                 const rows = data.VwsmAdstrdSelngW.row;
                 if (rows.length > 0) {
-                    // Initialize Aggregation
                     aggregatedData = {
                         stdrYearQuarter: q,
                         totalAmount: 0,
@@ -667,18 +615,15 @@ export const fetchSeoulSalesData = async (adminCode: string): Promise<SeoulSales
                     };
 
                     rows.forEach((row: any) => {
-                        // Amount & Count
                         aggregatedData!.totalAmount += row.TH_MON_SELNG_AMT + row.TH_TUE_SELNG_AMT + row.TH_WED_SELNG_AMT + row.TH_THU_SELNG_AMT + row.TH_FRI_SELNG_AMT + row.TH_SAT_SELNG_AMT + row.TH_SUN_SELNG_AMT;
                         aggregatedData!.totalCount += row.TH_MON_SELNG_CO + row.TH_TUE_SELNG_CO + row.TH_WED_SELNG_CO + row.TH_THU_SELNG_CO + row.TH_FRI_SELNG_CO + row.TH_SAT_SELNG_CO + row.TH_SUN_SELNG_CO;
 
-                        // Weekday vs Weekend
                         aggregatedData!.weekdayAmount += row.TH_MON_SELNG_AMT + row.TH_TUE_SELNG_AMT + row.TH_WED_SELNG_AMT + row.TH_THU_SELNG_AMT + row.TH_FRI_SELNG_AMT;
                         aggregatedData!.weekendAmount += row.TH_SAT_SELNG_AMT + row.TH_SUN_SELNG_AMT;
                         
                         aggregatedData!.weekdayCount += row.TH_MON_SELNG_CO + row.TH_TUE_SELNG_CO + row.TH_WED_SELNG_CO + row.TH_THU_SELNG_CO + row.TH_FRI_SELNG_CO;
                         aggregatedData!.weekendCount += row.TH_SAT_SELNG_CO + row.TH_SUN_SELNG_CO;
 
-                        // Day of Week
                         aggregatedData!.dayAmount.MON += row.TH_MON_SELNG_AMT;
                         aggregatedData!.dayAmount.TUE += row.TH_TUE_SELNG_AMT;
                         aggregatedData!.dayAmount.WED += row.TH_WED_SELNG_AMT;
@@ -695,7 +640,6 @@ export const fetchSeoulSalesData = async (adminCode: string): Promise<SeoulSales
                         aggregatedData!.dayCount.SAT += row.TH_SAT_SELNG_CO;
                         aggregatedData!.dayCount.SUN += row.TH_SUN_SELNG_CO;
 
-                        // Time Slot
                         aggregatedData!.timeAmount["00_06"] += row.TMZN_00_06_SELNG_AMT;
                         aggregatedData!.timeAmount["06_11"] += row.TMZN_06_11_SELNG_AMT;
                         aggregatedData!.timeAmount["11_14"] += row.TMZN_11_14_SELNG_AMT;
@@ -710,13 +654,11 @@ export const fetchSeoulSalesData = async (adminCode: string): Promise<SeoulSales
                         aggregatedData!.timeCount["17_21"] += row.TMZN_17_21_SELNG_CO;
                         aggregatedData!.timeCount["21_24"] += row.TMZN_21_24_SELNG_CO;
 
-                        // Gender
                         aggregatedData!.genderAmount.male += row.ML_SELNG_AMT;
                         aggregatedData!.genderAmount.female += row.FML_SELNG_AMT;
                         aggregatedData!.genderCount.male += row.ML_SELNG_CO;
                         aggregatedData!.genderCount.female += row.FML_SELNG_CO;
 
-                        // Age
                         aggregatedData!.ageAmount["10"] += row.AGRDE_10_SELNG_AMT;
                         aggregatedData!.ageAmount["20"] += row.AGRDE_20_SELNG_AMT;
                         aggregatedData!.ageAmount["30"] += row.AGRDE_30_SELNG_AMT;
@@ -732,26 +674,20 @@ export const fetchSeoulSalesData = async (adminCode: string): Promise<SeoulSales
                         aggregatedData!.ageCount["60"] += row.AGRDE_60_ABOVE_SELNG_CO;
                     });
                     
-                    // Break after successful fetch and aggregation
                     break;
                 }
             }
         } catch (e) {
-            console.warn(`Seoul API Network/Retry Error (${q}):`, e);
+            // Ignore
         }
     }
 
     return aggregatedData;
 };
 
-/**
- * 좌표(위경도)를 행정동 코드로 변환 (Reverse Geocoding)
- * V-World API 사용
- */
 export const getAdminCodeFromCoords = async (lat: number, lon: number): Promise<string | null> => {
-    if (!VWORLD_KEY || VWORLD_KEY.startsWith("YOUR")) return null;
+    if (!VWORLD_KEY) return null;
     
-    // Using V-World Reverse Geocoding via JSONP
     const url = `https://api.vworld.kr/req/address?service=address&request=getAddress&version=2.0&crs=EPSG:4326&point=${lon},${lat}&format=json&type=PARCEL&zipcode=false&simple=false&key=${VWORLD_KEY}`;
     
     try {
