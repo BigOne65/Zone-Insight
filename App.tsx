@@ -102,7 +102,7 @@ const App: React.FC = () => {
 
   useEffect(() => {
     return onDebugUrl((url) => {
-        setDebugUrls(prev => [url, ...prev].slice(0, 20));
+        setDebugUrls(prev => [url, ...prev].slice(0, 50));
     });
   }, []);
 
@@ -379,25 +379,29 @@ const App: React.FC = () => {
 
   return (
     <div className="min-h-screen max-w-6xl mx-auto p-3 md:p-8 flex flex-col">
-      {debugUrls.length > 0 && (
-         <div className="bg-gray-800 text-green-300 p-3 text-xs font-mono overflow-x-auto border-b-2 border-green-500 mb-6 rounded-lg shadow-lg">
+       <div className="bg-gray-800 text-green-300 p-3 text-xs font-mono overflow-x-auto border-b-4 border-green-500 mb-6 rounded-lg shadow-xl">
             <div className="flex justify-between mb-2 border-b border-gray-600 pb-1">
                <span className="font-bold text-white flex items-center gap-2">
-                   <span className="w-2 h-2 rounded-full bg-green-500 animate-pulse"></span>
-                   API REQUEST URL LOG
+                   <span className={`w-2 h-2 rounded-full ${debugUrls.length > 0 ? 'bg-green-500 animate-pulse' : 'bg-gray-500'}`}></span>
+                   API REQUEST URL LOG ({debugUrls.length})
                </span>
                <button onClick={()=>setDebugUrls([])} className="bg-gray-700 px-3 py-0.5 rounded text-white hover:bg-gray-600 transition-colors">Clear</button>
             </div>
             <div className="max-h-40 overflow-y-auto space-y-1 custom-scrollbar">
-                {debugUrls.map((url, i) => (
-                    <div key={i} className="whitespace-nowrap hover:bg-gray-700 px-1 rounded">
-                        <span className="text-gray-500 mr-2">[{i+1}]</span>
-                        {url}
+                {debugUrls.length === 0 ? (
+                    <div className="text-gray-500 italic p-2 flex items-center gap-2">
+                        <Icons.Search className="w-3 h-3"/> API 요청을 기다리고 있습니다... (검색을 실행해보세요)
                     </div>
-                ))}
+                ) : (
+                    debugUrls.map((url, i) => (
+                        <div key={i} className="whitespace-nowrap hover:bg-gray-700 px-2 py-1 rounded border-b border-gray-700/50 flex items-center gap-2">
+                            <span className="text-yellow-500 font-bold min-w-[24px]">[{debugUrls.length - i}]</span>
+                            <span className="break-all text-gray-300">{url}</span>
+                        </div>
+                    ))
+                )}
             </div>
-         </div>
-      )}
+       </div>
 
       <div className="flex-grow">
       {/* Header */}
