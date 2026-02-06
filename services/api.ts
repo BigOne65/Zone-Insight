@@ -10,8 +10,6 @@ const PROJ_5179 = "+proj=tmerc +lat_0=38 +lon_0=127.5 +k=0.9996 +x_0=1000000 +y_
 
 /**
  * 환경 변수 로드 헬퍼
- * API 키는 Vercel 등 호스팅 서비스의 Environment Variables에서 로드합니다.
- * (Vite 사용 시 VITE_ 접두사 필수)
  */
 const getEnvVar = (key: string): string => {
     // @ts-ignore
@@ -29,11 +27,15 @@ const SGIS_ID = getEnvVar("VITE_SGIS_SERVICE_ID");
 const SGIS_SECRET = getEnvVar("VITE_SGIS_SECRET_KEY");
 const SEOUL_DATA_KEY = getEnvVar("VITE_SEOUL_DATA_KEY");
 
-// API Endpoints
-const BASE_URL = "https://apis.data.go.kr/B553077/api/open/sdsc2";
+// API Endpoints (Using Local Proxy via vite.config.ts or vercel.json)
+// V-World supports JSONP/CORS natively, so we keep it direct.
 const VWORLD_BASE_URL = "https://api.vworld.kr/req/search";
-const SGIS_BASE_URL = "https://sgisapi.mods.go.kr/OpenAPI3";
-const SEOUL_BASE_URL = "http://openapi.seoul.go.kr:8088";
+
+// Proxied Endpoints
+const BASE_URL = "/api/public";
+const SGIS_BASE_URL = "/api/sgis";
+const SEOUL_BASE_URL = "/api/seoul";
+const SBIZ_BASE_URL_PROXY = "/api/sbiz";
 
 // --- Cache ---
 const polygonCache = new Map<string, number[][][]>();
@@ -86,35 +88,21 @@ const fetchJsonp = (url: string, callbackParam = 'callback'): Promise<any> => {
 };
 
 /**
- * 프록시 서버 리스트
- * 1순위: corsproxy.io (속도가 빠르고 안정적)
- * 2순위: allorigins.win (범용적이나 가끔 느림)
+ * Standard Fetch Wrapper
+ * No longer requires external proxies. Vercel/Vite handles CORS.
  */
-const PROXY_LIST = [
-    (url: string) => `https://corsproxy.io/?${encodeURIComponent(url)}`,
-    (url: string) => `https://api.allorigins.win/raw?url=${encodeURIComponent(url)}`,
-];
-
-let currentProxyIndex = 0;
-
-const fetchWithRetry = async (targetUrl: string): Promise<string> => {
-    let lastError;
-    
-    // Try up to the number of available proxies
-    for (let i = 0; i < PROXY_LIST.length; i++) {
-        const idx = (currentProxyIndex + i) % PROXY_LIST.length;
-        
-        try {
-            const response = await fetch(PROXY_LIST[idx](targetUrl));
-            if (!response.ok) throw new Error(`HTTP status ${response.status}`);
-            currentProxyIndex = idx;
-            return await response.text();
-        } catch (e) {
-            console.warn(`Proxy ${idx + 1} failed:`, e);
-            lastError = e;
+const fetchStandard = async (url: string): Promise<string> => {
+    try {
+        const response = await fetch(url);
+        if (!response.ok) {
+            // Check if it's a 403/500 from the target API
+            throw new Error(`HTTP status ${response.status}`);
         }
+        return await response.text();
+    } catch (e: any) {
+        console.warn(`Fetch failed for ${url}:`, e);
+        throw new Error(`데이터 요청 실패: ${e.message}`);
     }
-    throw new Error(`데이터를 불러오는 데 실패했습니다. 잠시 후 다시 시도해주세요. (${lastError})`);
 };
 
 // --- SGIS Helpers ---
@@ -135,7 +123,7 @@ const getSgisToken = async (): Promise<string> => {
     
     let responseText;
     try {
-        responseText = await fetchWithRetry(url);
+        responseText = await fetchStandard(url);
     } catch (e: any) {
         throw new Error(`SGIS 인증 실패: ${e.message}`);
     }
@@ -157,6 +145,7 @@ export const searchAddress = async (address: string): Promise<any> => {
     if (!VWORLD_KEY) throw new Error("V-World API Key가 누락되었습니다.");
     let errorDetails: string[] = [];
     
+    // V-World uses JSONP, so it doesn't need proxy
     const runSearch = async (searchType: string, category?: string) => {
         let baseUrl = `${VWORLD_BASE_URL}?service=search&request=search&version=2.0&crs=EPSG:4326&size=10&page=1&query=${encodeURIComponent(address)}&type=${searchType}&format=json&errorformat=json&key=${VWORLD_KEY}`;
         if (category) baseUrl += `&category=${category}`;
@@ -188,7 +177,7 @@ export const searchZones = async (lat: number, lon: number): Promise<Zone[]> => 
     const serviceKey = getFormattedKey(DATA_API_KEY);
     const zoneUrl = `${BASE_URL}/storeZoneInRadius?radius=${SEARCH_RADIUS}&cx=${lon}&cy=${lat}&serviceKey=${serviceKey}&type=json`;
     
-    const zoneText = await fetchWithRetry(zoneUrl);
+    const zoneText = await fetchStandard(zoneUrl);
     
     if (zoneText.trim().startsWith('<')) {
         throw new Error(parseXmlError(zoneText));
@@ -219,7 +208,7 @@ export const fetchStores = async (zoneNo: string, onProgress: (msg: string) => v
     const serviceKey = getFormattedKey(DATA_API_KEY);
     const firstUrl = `${BASE_URL}/storeListInArea?key=${zoneNo}&numOfRows=${PAGE_SIZE}&pageNo=1&serviceKey=${serviceKey}&type=json`;
     
-    const firstText = await fetchWithRetry(firstUrl);
+    const firstText = await fetchStandard(firstUrl);
     
     if (firstText.trim().startsWith('<')) {
         throw new Error(parseXmlError(firstText));
@@ -250,7 +239,7 @@ export const fetchStores = async (zoneNo: string, onProgress: (msg: string) => v
             for (let page = i; page <= endPage; page++) {
                 const nextUrl = `${BASE_URL}/storeListInArea?key=${zoneNo}&numOfRows=${PAGE_SIZE}&pageNo=${page}&serviceKey=${serviceKey}&type=json`;
                 promises.push(
-                    fetchWithRetry(nextUrl)
+                    fetchStandard(nextUrl)
                         .then(text => {
                             if (text.trim().startsWith('<')) return null;
                             const json = JSON.parse(text);
@@ -286,7 +275,7 @@ export const fetchStores = async (zoneNo: string, onProgress: (msg: string) => v
 const fetchBaroApi = async (resId: string, catId: string, extraParams: string = "") => {
     const serviceKey = getFormattedKey(DATA_API_KEY);
     const url = `${BASE_URL}/baroApi?resId=${resId}&catId=${catId}&type=json&serviceKey=${serviceKey}${extraParams}`;
-    const text = await fetchWithRetry(url);
+    const text = await fetchStandard(url);
     if (text.trim().startsWith('<')) return [];
     try {
         const json = JSON.parse(text);
@@ -360,7 +349,7 @@ export const fetchLocalAdminPolygon = async (zone: Zone): Promise<number[][][]> 
         
         const geoUrl = `${SGIS_BASE_URL}/addr/geocode.json?accessToken=${token}&address=${encodeURIComponent(zone.mainTrarNm)}`;
         
-        let geoResStr = await fetchWithRetry(geoUrl);
+        let geoResStr = await fetchStandard(geoUrl);
         const geoData = JSON.parse(geoResStr);
         
         let admCd = "";
@@ -373,13 +362,13 @@ export const fetchLocalAdminPolygon = async (zone: Zone): Promise<number[][][]> 
         const currentYear = new Date().getFullYear().toString();
         let boundUrl = `${SGIS_BASE_URL}/boundary/hadmarea.geojson?accessToken=${token}&adm_cd=${admCd}&year=${currentYear}&low_search=0`;
         
-        let boundResStr = await fetchWithRetry(boundUrl);
+        let boundResStr = await fetchStandard(boundUrl);
         let boundData = JSON.parse(boundResStr);
 
         if (!boundData.features || boundData.features.length === 0) {
              const prevYear = (new Date().getFullYear() - 1).toString();
              boundUrl = `${SGIS_BASE_URL}/boundary/hadmarea.geojson?accessToken=${token}&adm_cd=${admCd}&year=${prevYear}&low_search=0`;
-             boundResStr = await fetchWithRetry(boundUrl);
+             boundResStr = await fetchStandard(boundUrl);
              boundData = JSON.parse(boundResStr);
         }
 
@@ -429,7 +418,7 @@ export const fetchStoresInAdmin = async (adminCode: string, divId: string, onPro
     const serviceKey = getFormattedKey(DATA_API_KEY);
     const firstUrl = `${BASE_URL}/storeListInDong?divId=${divId}&key=${adminCode}&numOfRows=${PAGE_SIZE}&pageNo=1&serviceKey=${serviceKey}&type=json`;
     
-    const firstText = await fetchWithRetry(firstUrl);
+    const firstText = await fetchStandard(firstUrl);
     
     if (firstText.trim().startsWith('<')) {
         throw new Error(parseXmlError(firstText));
@@ -460,7 +449,7 @@ export const fetchStoresInAdmin = async (adminCode: string, divId: string, onPro
             for (let page = i; page <= endPage; page++) {
                 const nextUrl = `${BASE_URL}/storeListInDong?divId=${divId}&key=${adminCode}&numOfRows=${PAGE_SIZE}&pageNo=${page}&serviceKey=${serviceKey}&type=json`;
                 promises.push(
-                    fetchWithRetry(nextUrl)
+                    fetchStandard(nextUrl)
                         .then(text => {
                              if (text.trim().startsWith('<')) return null;
                              const json = JSON.parse(text);
@@ -494,20 +483,20 @@ export const fetchStoresInAdmin = async (adminCode: string, divId: string, onPro
 };
 
 export const fetchSbizData = async (dongCd: string): Promise<SbizStats> => {
-    const SBIZ_BASE_URL = "https://bigdata.sbiz.or.kr/sbiz/api/bizonSttus";
+    // Sbiz also proxied
     const endpoints = {
-        maxSales: `${SBIZ_BASE_URL}/MaxSlsBiz/search.json?dongCd=${dongCd}`,
-        delivery: `${SBIZ_BASE_URL}/DlvyDay/search.json?dongCd=${dongCd}`,
-        ageRank: `${SBIZ_BASE_URL}/VstAgeRnk/search.json?dongCd=${dongCd}`,
-        population: `${SBIZ_BASE_URL}/cfrDynppl/search.json?dongCd=${dongCd}`
+        maxSales: `${SBIZ_BASE_URL_PROXY}/MaxSlsBiz/search.json?dongCd=${dongCd}`,
+        delivery: `${SBIZ_BASE_URL_PROXY}/DlvyDay/search.json?dongCd=${dongCd}`,
+        ageRank: `${SBIZ_BASE_URL_PROXY}/VstAgeRnk/search.json?dongCd=${dongCd}`,
+        population: `${SBIZ_BASE_URL_PROXY}/cfrDynppl/search.json?dongCd=${dongCd}`
     };
 
     try {
         const [maxSalesRes, deliveryRes, ageRankRes, populationRes] = await Promise.all([
-            fetchWithRetry(endpoints.maxSales).then(t => JSON.parse(t)).catch(() => null),
-            fetchWithRetry(endpoints.delivery).then(t => JSON.parse(t)).catch(() => null),
-            fetchWithRetry(endpoints.ageRank).then(t => JSON.parse(t)).catch(() => null),
-            fetchWithRetry(endpoints.population).then(t => JSON.parse(t)).catch(() => null)
+            fetchStandard(endpoints.maxSales).then(t => JSON.parse(t)).catch(() => null),
+            fetchStandard(endpoints.delivery).then(t => JSON.parse(t)).catch(() => null),
+            fetchStandard(endpoints.ageRank).then(t => JSON.parse(t)).catch(() => null),
+            fetchStandard(endpoints.population).then(t => JSON.parse(t)).catch(() => null)
         ]);
 
         const formatAge = (ageCode: string) => {
@@ -587,7 +576,7 @@ export const fetchSeoulSalesData = async (adminCode: string): Promise<SeoulSales
         const url = `${SEOUL_BASE_URL}/${SEOUL_DATA_KEY}/json/${serviceName}/1/1000/${q}/${adminCode}`;
         
         try {
-            const jsonText = await fetchWithRetry(url);
+            const jsonText = await fetchStandard(url);
             let data: any;
             try {
                 data = JSON.parse(jsonText);
@@ -688,6 +677,7 @@ export const fetchSeoulSalesData = async (adminCode: string): Promise<SeoulSales
 export const getAdminCodeFromCoords = async (lat: number, lon: number): Promise<string | null> => {
     if (!VWORLD_KEY) return null;
     
+    // V-World Reverse Geocoding uses JSONP, direct call is fine.
     const url = `https://api.vworld.kr/req/address?service=address&request=getAddress&version=2.0&crs=EPSG:4326&point=${lon},${lat}&format=json&type=PARCEL&zipcode=false&simple=false&key=${VWORLD_KEY}`;
     
     try {

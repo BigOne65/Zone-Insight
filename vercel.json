@@ -1,0 +1,20 @@
+{
+  "rewrites": [
+    {
+      "source": "/api/public/:path*",
+      "destination": "https://apis.data.go.kr/B553077/api/open/sdsc2/:path*"
+    },
+    {
+      "source": "/api/sgis/:path*",
+      "destination": "https://sgisapi.mods.go.kr/OpenAPI3/:path*"
+    },
+    {
+      "source": "/api/seoul/:path*",
+      "destination": "http://openapi.seoul.go.kr:8088/:path*"
+    },
+    {
+      "source": "/api/sbiz/:path*",
+      "destination": "https://bigdata.sbiz.or.kr/sbiz/api/bizonSttus/:path*"
+    }
+  ]
+}
