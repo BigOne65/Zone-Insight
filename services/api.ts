@@ -553,6 +553,9 @@ export const fetchSbizData = async (dongCd: string): Promise<SbizStats> => {
     }
 };
 
+/**
+ * 서울 열린데이터 광장 (행정동별 추정매출) 데이터 조회
+ */
 export const fetchSeoulSalesData = async (adminCode: string): Promise<SeoulSalesData | null> => {
     if (!SEOUL_DATA_KEY) {
         console.warn("서울 데이터 API 키가 없습니다.");
@@ -571,6 +574,85 @@ export const fetchSeoulSalesData = async (adminCode: string): Promise<SeoulSales
 
     const serviceName = "VwsmAdstrdSelngW";
     let aggregatedData: SeoulSalesData | null = null;
+    const industryMap: Record<string, SeoulSalesData> = {};
+
+    // Helper to accumulate row data into a target SeoulSalesData object
+    const accumulateRow = (target: SeoulSalesData, row: any) => {
+        target.totalAmount += row.TH_MON_SELNG_AMT + row.TH_TUE_SELNG_AMT + row.TH_WED_SELNG_AMT + row.TH_THU_SELNG_AMT + row.TH_FRI_SELNG_AMT + row.TH_SAT_SELNG_AMT + row.TH_SUN_SELNG_AMT;
+        target.totalCount += row.TH_MON_SELNG_CO + row.TH_TUE_SELNG_CO + row.TH_WED_SELNG_CO + row.TH_THU_SELNG_CO + row.TH_FRI_SELNG_CO + row.TH_SAT_SELNG_CO + row.TH_SUN_SELNG_CO;
+
+        target.weekdayAmount += row.TH_MON_SELNG_AMT + row.TH_TUE_SELNG_AMT + row.TH_WED_SELNG_AMT + row.TH_THU_SELNG_AMT + row.TH_FRI_SELNG_AMT;
+        target.weekendAmount += row.TH_SAT_SELNG_AMT + row.TH_SUN_SELNG_AMT;
+        
+        target.weekdayCount += row.TH_MON_SELNG_CO + row.TH_TUE_SELNG_CO + row.TH_WED_SELNG_CO + row.TH_THU_SELNG_CO + row.TH_FRI_SELNG_CO;
+        target.weekendCount += row.TH_SAT_SELNG_CO + row.TH_SUN_SELNG_CO;
+
+        target.dayAmount.MON += row.TH_MON_SELNG_AMT;
+        target.dayAmount.TUE += row.TH_TUE_SELNG_AMT;
+        target.dayAmount.WED += row.TH_WED_SELNG_AMT;
+        target.dayAmount.THU += row.TH_THU_SELNG_AMT;
+        target.dayAmount.FRI += row.TH_FRI_SELNG_AMT;
+        target.dayAmount.SAT += row.TH_SAT_SELNG_AMT;
+        target.dayAmount.SUN += row.TH_SUN_SELNG_AMT;
+
+        target.dayCount.MON += row.TH_MON_SELNG_CO;
+        target.dayCount.TUE += row.TH_TUE_SELNG_CO;
+        target.dayCount.WED += row.TH_WED_SELNG_CO;
+        target.dayCount.THU += row.TH_THU_SELNG_CO;
+        target.dayCount.FRI += row.TH_FRI_SELNG_CO;
+        target.dayCount.SAT += row.TH_SAT_SELNG_CO;
+        target.dayCount.SUN += row.TH_SUN_SELNG_CO;
+
+        target.timeAmount["00_06"] += row.TMZN_00_06_SELNG_AMT;
+        target.timeAmount["06_11"] += row.TMZN_06_11_SELNG_AMT;
+        target.timeAmount["11_14"] += row.TMZN_11_14_SELNG_AMT;
+        target.timeAmount["14_17"] += row.TMZN_14_17_SELNG_AMT;
+        target.timeAmount["17_21"] += row.TMZN_17_21_SELNG_AMT;
+        target.timeAmount["21_24"] += row.TMZN_21_24_SELNG_AMT;
+
+        target.timeCount["00_06"] += row.TMZN_00_06_SELNG_CO;
+        target.timeCount["06_11"] += row.TMZN_06_11_SELNG_CO;
+        target.timeCount["11_14"] += row.TMZN_11_14_SELNG_CO;
+        target.timeCount["14_17"] += row.TMZN_14_17_SELNG_CO;
+        target.timeCount["17_21"] += row.TMZN_17_21_SELNG_CO;
+        target.timeCount["21_24"] += row.TMZN_21_24_SELNG_CO;
+
+        target.genderAmount.male += row.ML_SELNG_AMT;
+        target.genderAmount.female += row.FML_SELNG_AMT;
+        target.genderCount.male += row.ML_SELNG_CO;
+        target.genderCount.female += row.FML_SELNG_CO;
+
+        target.ageAmount["10"] += row.AGRDE_10_SELNG_AMT;
+        target.ageAmount["20"] += row.AGRDE_20_SELNG_AMT;
+        target.ageAmount["30"] += row.AGRDE_30_SELNG_AMT;
+        target.ageAmount["40"] += row.AGRDE_40_SELNG_AMT;
+        target.ageAmount["50"] += row.AGRDE_50_SELNG_AMT;
+        target.ageAmount["60"] += row.AGRDE_60_ABOVE_SELNG_AMT;
+
+        target.ageCount["10"] += row.AGRDE_10_SELNG_CO;
+        target.ageCount["20"] += row.AGRDE_20_SELNG_CO;
+        target.ageCount["30"] += row.AGRDE_30_SELNG_CO;
+        target.ageCount["40"] += row.AGRDE_40_SELNG_CO;
+        target.ageCount["50"] += row.AGRDE_50_SELNG_CO;
+        target.ageCount["60"] += row.AGRDE_60_ABOVE_SELNG_CO;
+    };
+
+    const createEmptyData = (quarter: string, serviceName?: string): SeoulSalesData => ({
+        stdrYearQuarter: quarter,
+        serviceName: serviceName,
+        totalAmount: 0,
+        totalCount: 0,
+        weekdayAmount: 0, weekendAmount: 0,
+        weekdayCount: 0, weekendCount: 0,
+        dayAmount: { MON: 0, TUE: 0, WED: 0, THU: 0, FRI: 0, SAT: 0, SUN: 0 },
+        dayCount: { MON: 0, TUE: 0, WED: 0, THU: 0, FRI: 0, SAT: 0, SUN: 0 },
+        timeAmount: { "00_06": 0, "06_11": 0, "11_14": 0, "14_17": 0, "17_21": 0, "21_24": 0 },
+        timeCount: { "00_06": 0, "06_11": 0, "11_14": 0, "14_17": 0, "17_21": 0, "21_24": 0 },
+        genderAmount: { male: 0, female: 0 },
+        genderCount: { male: 0, female: 0 },
+        ageAmount: { "10": 0, "20": 0, "30": 0, "40": 0, "50": 0, "60": 0 },
+        ageCount: { "10": 0, "20": 0, "30": 0, "40": 0, "50": 0, "60": 0 }
+    });
 
     for (const q of targetQuarters) {
         const url = `${SEOUL_BASE_URL}/${SEOUL_DATA_KEY}/json/${serviceName}/1/1000/${q}/${adminCode}`;
@@ -587,82 +669,23 @@ export const fetchSeoulSalesData = async (adminCode: string): Promise<SeoulSales
             if (data.VwsmAdstrdSelngW && data.VwsmAdstrdSelngW.row) {
                 const rows = data.VwsmAdstrdSelngW.row;
                 if (rows.length > 0) {
-                    aggregatedData = {
-                        stdrYearQuarter: q,
-                        totalAmount: 0,
-                        totalCount: 0,
-                        weekdayAmount: 0, weekendAmount: 0,
-                        weekdayCount: 0, weekendCount: 0,
-                        dayAmount: { MON: 0, TUE: 0, WED: 0, THU: 0, FRI: 0, SAT: 0, SUN: 0 },
-                        dayCount: { MON: 0, TUE: 0, WED: 0, THU: 0, FRI: 0, SAT: 0, SUN: 0 },
-                        timeAmount: { "00_06": 0, "06_11": 0, "11_14": 0, "14_17": 0, "17_21": 0, "21_24": 0 },
-                        timeCount: { "00_06": 0, "06_11": 0, "11_14": 0, "14_17": 0, "17_21": 0, "21_24": 0 },
-                        genderAmount: { male: 0, female: 0 },
-                        genderCount: { male: 0, female: 0 },
-                        ageAmount: { "10": 0, "20": 0, "30": 0, "40": 0, "50": 0, "60": 0 },
-                        ageCount: { "10": 0, "20": 0, "30": 0, "40": 0, "50": 0, "60": 0 }
-                    };
+                    // Initialize Total Aggregation
+                    aggregatedData = createEmptyData(q);
 
                     rows.forEach((row: any) => {
-                        aggregatedData!.totalAmount += row.TH_MON_SELNG_AMT + row.TH_TUE_SELNG_AMT + row.TH_WED_SELNG_AMT + row.TH_THU_SELNG_AMT + row.TH_FRI_SELNG_AMT + row.TH_SAT_SELNG_AMT + row.TH_SUN_SELNG_AMT;
-                        aggregatedData!.totalCount += row.TH_MON_SELNG_CO + row.TH_TUE_SELNG_CO + row.TH_WED_SELNG_CO + row.TH_THU_SELNG_CO + row.TH_FRI_SELNG_CO + row.TH_SAT_SELNG_CO + row.TH_SUN_SELNG_CO;
+                        // 1. Accumulate to Total
+                        accumulateRow(aggregatedData!, row);
 
-                        aggregatedData!.weekdayAmount += row.TH_MON_SELNG_AMT + row.TH_TUE_SELNG_AMT + row.TH_WED_SELNG_AMT + row.TH_THU_SELNG_AMT + row.TH_FRI_SELNG_AMT;
-                        aggregatedData!.weekendAmount += row.TH_SAT_SELNG_AMT + row.TH_SUN_SELNG_AMT;
-                        
-                        aggregatedData!.weekdayCount += row.TH_MON_SELNG_CO + row.TH_TUE_SELNG_CO + row.TH_WED_SELNG_CO + row.TH_THU_SELNG_CO + row.TH_FRI_SELNG_CO;
-                        aggregatedData!.weekendCount += row.TH_SAT_SELNG_CO + row.TH_SUN_SELNG_CO;
-
-                        aggregatedData!.dayAmount.MON += row.TH_MON_SELNG_AMT;
-                        aggregatedData!.dayAmount.TUE += row.TH_TUE_SELNG_AMT;
-                        aggregatedData!.dayAmount.WED += row.TH_WED_SELNG_AMT;
-                        aggregatedData!.dayAmount.THU += row.TH_THU_SELNG_AMT;
-                        aggregatedData!.dayAmount.FRI += row.TH_FRI_SELNG_AMT;
-                        aggregatedData!.dayAmount.SAT += row.TH_SAT_SELNG_AMT;
-                        aggregatedData!.dayAmount.SUN += row.TH_SUN_SELNG_AMT;
-
-                        aggregatedData!.dayCount.MON += row.TH_MON_SELNG_CO;
-                        aggregatedData!.dayCount.TUE += row.TH_TUE_SELNG_CO;
-                        aggregatedData!.dayCount.WED += row.TH_WED_SELNG_CO;
-                        aggregatedData!.dayCount.THU += row.TH_THU_SELNG_CO;
-                        aggregatedData!.dayCount.FRI += row.TH_FRI_SELNG_CO;
-                        aggregatedData!.dayCount.SAT += row.TH_SAT_SELNG_CO;
-                        aggregatedData!.dayCount.SUN += row.TH_SUN_SELNG_CO;
-
-                        aggregatedData!.timeAmount["00_06"] += row.TMZN_00_06_SELNG_AMT;
-                        aggregatedData!.timeAmount["06_11"] += row.TMZN_06_11_SELNG_AMT;
-                        aggregatedData!.timeAmount["11_14"] += row.TMZN_11_14_SELNG_AMT;
-                        aggregatedData!.timeAmount["14_17"] += row.TMZN_14_17_SELNG_AMT;
-                        aggregatedData!.timeAmount["17_21"] += row.TMZN_17_21_SELNG_AMT;
-                        aggregatedData!.timeAmount["21_24"] += row.TMZN_21_24_SELNG_AMT;
-
-                        aggregatedData!.timeCount["00_06"] += row.TMZN_00_06_SELNG_CO;
-                        aggregatedData!.timeCount["06_11"] += row.TMZN_06_11_SELNG_CO;
-                        aggregatedData!.timeCount["11_14"] += row.TMZN_11_14_SELNG_CO;
-                        aggregatedData!.timeCount["14_17"] += row.TMZN_14_17_SELNG_CO;
-                        aggregatedData!.timeCount["17_21"] += row.TMZN_17_21_SELNG_CO;
-                        aggregatedData!.timeCount["21_24"] += row.TMZN_21_24_SELNG_CO;
-
-                        aggregatedData!.genderAmount.male += row.ML_SELNG_AMT;
-                        aggregatedData!.genderAmount.female += row.FML_SELNG_AMT;
-                        aggregatedData!.genderCount.male += row.ML_SELNG_CO;
-                        aggregatedData!.genderCount.female += row.FML_SELNG_CO;
-
-                        aggregatedData!.ageAmount["10"] += row.AGRDE_10_SELNG_AMT;
-                        aggregatedData!.ageAmount["20"] += row.AGRDE_20_SELNG_AMT;
-                        aggregatedData!.ageAmount["30"] += row.AGRDE_30_SELNG_AMT;
-                        aggregatedData!.ageAmount["40"] += row.AGRDE_40_SELNG_AMT;
-                        aggregatedData!.ageAmount["50"] += row.AGRDE_50_SELNG_AMT;
-                        aggregatedData!.ageAmount["60"] += row.AGRDE_60_ABOVE_SELNG_AMT;
-
-                        aggregatedData!.ageCount["10"] += row.AGRDE_10_SELNG_CO;
-                        aggregatedData!.ageCount["20"] += row.AGRDE_20_SELNG_CO;
-                        aggregatedData!.ageCount["30"] += row.AGRDE_30_SELNG_CO;
-                        aggregatedData!.ageCount["40"] += row.AGRDE_40_SELNG_CO;
-                        aggregatedData!.ageCount["50"] += row.AGRDE_50_SELNG_CO;
-                        aggregatedData!.ageCount["60"] += row.AGRDE_60_ABOVE_SELNG_CO;
+                        // 2. Accumulate to Industry Specific
+                        const svcName = row.SVC_INDUTY_CD_NM;
+                        if (!industryMap[svcName]) {
+                            industryMap[svcName] = createEmptyData(q, svcName);
+                        }
+                        accumulateRow(industryMap[svcName], row);
                     });
                     
+                    // Attach grouped industry data to the result
+                    aggregatedData.byIndustry = Object.values(industryMap).sort((a, b) => b.totalAmount - a.totalAmount);
                     break;
                 }
             }

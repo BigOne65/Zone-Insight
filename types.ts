@@ -91,6 +91,8 @@ export interface SbizStats {
 // Seoul Estimated Sales Data Types
 export interface SeoulSalesData {
   stdrYearQuarter: string; // 기준 년분기 (예: 20231)
+  serviceName?: string;    // 업종명 (전체일 경우 undefined 혹은 '전체')
+  
   totalAmount: number;     // 당월 매출 금액
   totalCount: number;      // 당월 매출 건수
   
@@ -115,4 +117,7 @@ export interface SeoulSalesData {
   // Age
   ageAmount: { [key: string]: number }; // 10, 20...
   ageCount: { [key: string]: number };
+
+  // 업종별 데이터 리스트 (메인 데이터에만 포함됨)
+  byIndustry?: SeoulSalesData[];
 }
