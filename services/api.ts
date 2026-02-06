@@ -731,7 +731,12 @@ export const fetchSeoulSalesData = async (adminCode: string): Promise<SeoulSales
     });
 
     for (const q of targetQuarters) {
-        const url = `${SEOUL_BASE_URL}/${SEOUL_DATA_KEY}/json/${serviceName}/1/1000/${q}/${adminCode}`;
+        // q는 YYYYQ 형태 (예: 20231)
+        const year = q.substring(0, 4);
+        const quarter = q.substring(4);
+        
+        // 올바른 API URL: YEAR / QUARTER / ADMIN_CODE
+        const url = `${SEOUL_BASE_URL}/${SEOUL_DATA_KEY}/json/${serviceName}/1/1000/${year}/${quarter}/${adminCode}`;
         
         try {
             const jsonText = await fetchStandard(url);
@@ -747,11 +752,16 @@ export const fetchSeoulSalesData = async (adminCode: string): Promise<SeoulSales
 
             if (responseData && responseData.row) {
                 const rows = responseData.row;
-                if (rows.length > 0) {
+                
+                // 사용자가 요청한 행정동 코드(ADSTRD_CD)와 일치하는 데이터만 필터링
+                // (URL 파라미터가 무시되어 전체 데이터가 내려오는 경우 대비)
+                const validRows = rows.filter((r: any) => !r.ADSTRD_CD || String(r.ADSTRD_CD) === String(adminCode));
+
+                if (validRows.length > 0) {
                     // Initialize Total Aggregation
                     aggregatedData = createEmptyData(q);
 
-                    rows.forEach((row: any) => {
+                    validRows.forEach((row: any) => {
                         // 1. Accumulate to Total
                         accumulateRow(aggregatedData!, row);
 
