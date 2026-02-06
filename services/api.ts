@@ -1,3 +1,4 @@
+
 import { Zone, Store, SbizStats, SeoulSalesData } from '../types';
 
 // Declare proj4 global
@@ -9,28 +10,20 @@ const PROJ_WGS84 = 'EPSG:4326';
 const PROJ_5179 = "+proj=tmerc +lat_0=38 +lon_0=127.5 +k=0.9996 +x_0=1000000 +y_0=2000000 +ellps=GRS80 +towgs84=0,0,0,0,0,0,0 +units=m +no_defs";
 
 /**
- * 환경 변수 로드 헬퍼
- * .env 파일이 없어도 빌드 타임/런타임 환경 변수(Vercel 등)에서 값을 읽어옵니다.
+ * SECURE KEY MANAGEMENT
+ * Instead of reading `import.meta.env` directly (which exposes keys to the client),
+ * we use placeholders. The `api/proxy.js` serverless function will replace these
+ * with the real keys from the server environment variables.
  */
-const getEnvVar = (key: string): string => {
-    // @ts-ignore
-    if (typeof import.meta !== 'undefined' && import.meta.env) {
-        // @ts-ignore
-        return import.meta.env[key] || "";
-    }
-    return "";
-};
-
-const DATA_API_KEY = getEnvVar("VITE_DATA_API_KEY");
-const VWORLD_KEY = getEnvVar("VITE_VWORLD_KEY");
-const SGIS_ID = getEnvVar("VITE_SGIS_SERVICE_ID");
-const SGIS_SECRET = getEnvVar("VITE_SGIS_SECRET_KEY");
-const SEOUL_DATA_KEY = getEnvVar("VITE_SEOUL_DATA_KEY");
+const DATA_API_KEY = "CONFIDENTIAL_DATA_API_KEY";
+const VWORLD_KEY = "CONFIDENTIAL_VWORLD_KEY";
+const SGIS_ID = "CONFIDENTIAL_SGIS_ID";
+const SGIS_SECRET = "CONFIDENTIAL_SGIS_SECRET";
+const SEOUL_DATA_KEY = "CONFIDENTIAL_SEOUL_KEY";
 
 // API Endpoints
 const BASE_URL = "https://apis.data.go.kr/B553077/api/open/sdsc2";
 const VWORLD_BASE_URL = "https://api.vworld.kr/req/search";
-// Update Base URL to mods.go.kr
 const SGIS_BASE_URL = "https://sgisapi.mods.go.kr/OpenAPI3";
 const SEOUL_BASE_URL = "http://openapi.seoul.go.kr:8088";
 
@@ -40,18 +33,7 @@ const polygonCache = new Map<string, number[][][]>();
 // --- Helpers ---
 
 /**
- * API Key 포맷팅
- * 공공데이터포털 키가 Decoding된 상태(+, / 포함)라면 반드시 인코딩해야 함.
- * 이미 Encoding된 상태(% 포함)라면 그대로 사용.
- */
-const getFormattedKey = (key: string) => {
-    if (!key) return "";
-    return key.includes('%') ? key : encodeURIComponent(key);
-};
-
-/**
  * XML 에러 파싱
- * 공공데이터포털은 에러 발생 시 status 200 OK와 함께 XML 에러 메시지를 반환하는 경우가 많음.
  */
 const parseXmlError = (text: string) => {
     try {
@@ -69,62 +51,26 @@ const parseXmlError = (text: string) => {
     }
 };
 
-// --- Network Helpers ---
+// --- Network Helpers (Proxy) ---
 
-const fetchJsonp = (url: string, callbackParam = 'callback'): Promise<any> => {
-    return new Promise((resolve, reject) => {
-        const script = document.createElement('script');
-        const callbackName = `jsonp_callback_${Math.round(100000 * Math.random())}`;
-        // @ts-ignore
-        window[callbackName] = (data: any) => {
-            // @ts-ignore
-            delete window[callbackName];
-            document.body.removeChild(script);
-            resolve(data);
-        };
-        script.src = `${url}&${callbackParam}=${callbackName}`;
-        script.onerror = () => {
-            // @ts-ignore
-            delete window[callbackName];
-            document.body.removeChild(script);
-            reject(new Error('JSONP Request Failed'));
-        };
-        document.body.appendChild(script);
-    });
-};
-
-// Proxy list optimized for speed and reliability
-// api.allorigins.win uses Cloudflare (Anycast), so it usually finds the fastest route (e.g. ICN node).
-const PROXY_LIST = [
-    (url: string) => `https://api.allorigins.win/raw?url=${encodeURIComponent(url)}`,
-    (url: string) => `https://api.codetabs.com/v1/proxy?quest=${encodeURIComponent(url)}`,
-];
-
-// Track the index of the currently working proxy to avoid retrying failed ones repeatedly
-let currentProxyIndex = 0;
-
-const fetchWithRetry = async (targetUrl: string): Promise<string> => {
-    let lastError;
-    
-    // Try up to the number of available proxies
-    for (let i = 0; i < PROXY_LIST.length; i++) {
-        // Calculate index starting from the current preferred proxy
-        const idx = (currentProxyIndex + i) % PROXY_LIST.length;
+/**
+ * fetchWithProxy
+ * Redirects requests to our own /api/proxy endpoint.
+ * This solves CORS and allows secure key injection on the server side.
+ */
+const fetchWithProxy = async (targetUrl: string): Promise<string> => {
+    try {
+        const encodedUrl = encodeURIComponent(targetUrl);
+        const response = await fetch(`/api/proxy?url=${encodedUrl}`);
         
-        try {
-            const response = await fetch(PROXY_LIST[idx](targetUrl));
-            if (!response.ok) throw new Error(`HTTP status ${response.status}`);
-            
-            // If successful, update the preferred proxy index to this one
-            currentProxyIndex = idx;
-            return await response.text();
-        } catch (e) {
-            console.warn(`Proxy ${idx + 1} failed:`, e);
-            lastError = e;
-            // Continue to next proxy
+        if (!response.ok) {
+            throw new Error(`Proxy Error: ${response.status} ${response.statusText}`);
         }
+        return await response.text();
+    } catch (e: any) {
+        console.error("Proxy Request Failed:", e);
+        throw new Error(`데이터 요청 실패: ${e.message}`);
     }
-    throw new Error(`모든 프록시 서버 연결 실패: ${lastError}`);
 };
 
 // --- SGIS Helpers ---
@@ -138,15 +84,12 @@ const getSgisToken = async (): Promise<string> => {
         return sgisAccessToken;
     }
 
-    if (!SGIS_ID || !SGIS_SECRET || SGIS_ID.startsWith("YOUR")) {
-        throw new Error("SGIS API Key가 설정되지 않았습니다. 환경 변수를 확인해주세요.");
-    }
-
+    // Note: We send the placeholders. The proxy will inject the real ID/Secret.
     const url = `${SGIS_BASE_URL}/auth/authentication.json?consumer_key=${SGIS_ID}&consumer_secret=${SGIS_SECRET}`;
     
     let responseText;
     try {
-        responseText = await fetchWithRetry(url);
+        responseText = await fetchWithProxy(url);
     } catch (e: any) {
         throw new Error(`SGIS 인증 실패: ${e.message}`);
     }
@@ -165,21 +108,27 @@ const getSgisToken = async (): Promise<string> => {
 // --- API Functions ---
 
 export const searchAddress = async (address: string): Promise<any> => {
-    if (!VWORLD_KEY || VWORLD_KEY.startsWith("YOUR")) throw new Error("V-World API Key가 설정되지 않았습니다.");
     let errorDetails: string[] = [];
     
+    // Now using fetchWithProxy instead of JSONP for V-World
     const runSearch = async (searchType: string, category?: string) => {
         let baseUrl = `${VWORLD_BASE_URL}?service=search&request=search&version=2.0&crs=EPSG:4326&size=10&page=1&query=${encodeURIComponent(address)}&type=${searchType}&format=json&errorformat=json&key=${VWORLD_KEY}`;
         if (category) baseUrl += `&category=${category}`;
+        
         try {
-            const data = await fetchJsonp(baseUrl);
-            if (data.response.status === "OK" && data.response.result?.items?.length > 0) return data.response.result.items[0];
-            else {
-                if (data.response.status !== "NOT_FOUND") errorDetails.push(`[${searchType}] ${data.response.error?.text || data.response.status}`);
+            const text = await fetchWithProxy(baseUrl);
+            const data = JSON.parse(text);
+            
+            if (data.response.status === "OK" && data.response.result?.items?.length > 0) {
+                return data.response.result.items[0];
+            } else {
+                if (data.response.status !== "NOT_FOUND") {
+                    errorDetails.push(`[${searchType}] ${data.response.error?.text || data.response.status}`);
+                }
                 return null;
             }
         } catch (e: any) {
-            errorDetails.push(`[${searchType}] Network Error: ${e.message}`);
+            errorDetails.push(`[${searchType}] Error: ${e.message}`);
             return null;
         }
     };
@@ -193,13 +142,12 @@ export const searchAddress = async (address: string): Promise<any> => {
 };
 
 export const searchZones = async (lat: number, lon: number): Promise<Zone[]> => {
-    if (!DATA_API_KEY || DATA_API_KEY.startsWith("YOUR")) throw new Error("공공데이터포털 API Key가 설정되지 않았습니다.");
     const SEARCH_RADIUS = 500;
     
-    const serviceKey = getFormattedKey(DATA_API_KEY);
-    const zoneUrl = `${BASE_URL}/storeZoneInRadius?radius=${SEARCH_RADIUS}&cx=${lon}&cy=${lat}&serviceKey=${serviceKey}&type=json`;
+    // Send the placeholder key; Proxy will replace it.
+    const zoneUrl = `${BASE_URL}/storeZoneInRadius?radius=${SEARCH_RADIUS}&cx=${lon}&cy=${lat}&serviceKey=${DATA_API_KEY}&type=json`;
     
-    const zoneText = await fetchWithRetry(zoneUrl);
+    const zoneText = await fetchWithProxy(zoneUrl);
     
     // Check for XML Error Response
     if (zoneText.trim().startsWith('<')) {
@@ -211,7 +159,6 @@ export const searchZones = async (lat: number, lon: number): Promise<Zone[]> => 
         const zoneJson = JSON.parse(zoneText);
         if (zoneJson.body && zoneJson.body.items) {
             zones = Array.isArray(zoneJson.body.items) ? zoneJson.body.items : [zoneJson.body.items];
-            // type: 'trade' 추가
             zones = zones.map((item: any) => ({ ...item, type: 'trade' }));
         }
     } catch (e) {
@@ -223,16 +170,14 @@ export const searchZones = async (lat: number, lon: number): Promise<Zone[]> => 
 };
 
 export const fetchStores = async (zoneNo: string, onProgress: (msg: string) => void): Promise<{ stores: Store[], stdrYm: string }> => {
-    if (!DATA_API_KEY) throw new Error("API Key Missing");
     const PAGE_SIZE = 500;
     let allStores: Store[] = [];
     let totalCount = 0;
     let stdrYm = "";
     
-    const serviceKey = getFormattedKey(DATA_API_KEY);
-    const firstUrl = `${BASE_URL}/storeListInArea?key=${zoneNo}&numOfRows=${PAGE_SIZE}&pageNo=1&serviceKey=${serviceKey}&type=json`;
+    const firstUrl = `${BASE_URL}/storeListInArea?key=${zoneNo}&numOfRows=${PAGE_SIZE}&pageNo=1&serviceKey=${DATA_API_KEY}&type=json`;
     
-    const firstText = await fetchWithRetry(firstUrl);
+    const firstText = await fetchWithProxy(firstUrl);
     
     if (firstText.trim().startsWith('<')) {
         throw new Error(parseXmlError(firstText));
@@ -252,7 +197,6 @@ export const fetchStores = async (zoneNo: string, onProgress: (msg: string) => v
     const totalPages = Math.ceil(totalCount / PAGE_SIZE);
     
     if (totalPages > 1) {
-        // Parallel fetching in batches to speed up loading
         const BATCH_SIZE = 6;
         let consecutiveErrors = 0;
 
@@ -262,9 +206,9 @@ export const fetchStores = async (zoneNo: string, onProgress: (msg: string) => v
 
             const promises = [];
             for (let page = i; page <= endPage; page++) {
-                const nextUrl = `${BASE_URL}/storeListInArea?key=${zoneNo}&numOfRows=${PAGE_SIZE}&pageNo=${page}&serviceKey=${serviceKey}&type=json`;
+                const nextUrl = `${BASE_URL}/storeListInArea?key=${zoneNo}&numOfRows=${PAGE_SIZE}&pageNo=${page}&serviceKey=${DATA_API_KEY}&type=json`;
                 promises.push(
-                    fetchWithRetry(nextUrl)
+                    fetchWithProxy(nextUrl)
                         .then(text => {
                             if (text.trim().startsWith('<')) return null;
                             const json = JSON.parse(text);
@@ -301,9 +245,8 @@ export const fetchStores = async (zoneNo: string, onProgress: (msg: string) => v
 };
 
 const fetchBaroApi = async (resId: string, catId: string, extraParams: string = "") => {
-    const serviceKey = getFormattedKey(DATA_API_KEY);
-    const url = `${BASE_URL}/baroApi?resId=${resId}&catId=${catId}&type=json&serviceKey=${serviceKey}${extraParams}`;
-    const text = await fetchWithRetry(url);
+    const url = `${BASE_URL}/baroApi?resId=${resId}&catId=${catId}&type=json&serviceKey=${DATA_API_KEY}${extraParams}`;
+    const text = await fetchWithProxy(url);
     if (text.trim().startsWith('<')) return [];
     try {
         const json = JSON.parse(text);
@@ -314,8 +257,6 @@ const fetchBaroApi = async (resId: string, catId: string, extraParams: string = 
 };
 
 export const searchAdminDistrict = async (sido: string, sigungu: string, dong: string): Promise<Zone[]> => {
-    if (!DATA_API_KEY) throw new Error("API Key Missing");
-    
     if (!sido) throw new Error("시/도 정보를 찾을 수 없습니다. (예: 서울특별시, 경기도)");
 
     const sidos = await fetchBaroApi('dong', 'mega');
@@ -379,7 +320,7 @@ export const fetchLocalAdminPolygon = async (zone: Zone): Promise<number[][][]> 
         
         const geoUrl = `${SGIS_BASE_URL}/addr/geocode.json?accessToken=${token}&address=${encodeURIComponent(zone.mainTrarNm)}`;
         
-        let geoResStr = await fetchWithRetry(geoUrl);
+        let geoResStr = await fetchWithProxy(geoUrl);
         const geoData = JSON.parse(geoResStr);
         
         let admCd = "";
@@ -390,20 +331,17 @@ export const fetchLocalAdminPolygon = async (zone: Zone): Promise<number[][][]> 
             return [];
         }
 
-        // SGIS API requires 'year' parameter (2000~2025)
-        // Automatically use current year (e.g. 2025)
         const currentYear = new Date().getFullYear().toString();
         let boundUrl = `${SGIS_BASE_URL}/boundary/hadmarea.geojson?accessToken=${token}&adm_cd=${admCd}&year=${currentYear}&low_search=0`;
         
-        let boundResStr = await fetchWithRetry(boundUrl);
+        let boundResStr = await fetchWithProxy(boundUrl);
         let boundData = JSON.parse(boundResStr);
 
-        // Fallback: If current year data is missing, try previous year
         if (!boundData.features || boundData.features.length === 0) {
              const prevYear = (new Date().getFullYear() - 1).toString();
              console.warn(`[SGIS] ${currentYear}년도 데이터 없음, ${prevYear}년도로 재시도`);
              boundUrl = `${SGIS_BASE_URL}/boundary/hadmarea.geojson?accessToken=${token}&adm_cd=${admCd}&year=${prevYear}&low_search=0`;
-             boundResStr = await fetchWithRetry(boundUrl);
+             boundResStr = await fetchWithProxy(boundUrl);
              boundData = JSON.parse(boundResStr);
         }
 
@@ -444,16 +382,14 @@ export const fetchLocalAdminPolygon = async (zone: Zone): Promise<number[][][]> 
 };
 
 export const fetchStoresInAdmin = async (adminCode: string, divId: string, onProgress: (msg: string) => void): Promise<{ stores: Store[], stdrYm: string }> => {
-    if (!DATA_API_KEY) throw new Error("API Key Missing");
     const PAGE_SIZE = 500;
     let allStores: Store[] = [];
     let totalCount = 0;
     let stdrYm = "";
     
-    const serviceKey = getFormattedKey(DATA_API_KEY);
-    const firstUrl = `${BASE_URL}/storeListInDong?divId=${divId}&key=${adminCode}&numOfRows=${PAGE_SIZE}&pageNo=1&serviceKey=${serviceKey}&type=json`;
+    const firstUrl = `${BASE_URL}/storeListInDong?divId=${divId}&key=${adminCode}&numOfRows=${PAGE_SIZE}&pageNo=1&serviceKey=${DATA_API_KEY}&type=json`;
     
-    const firstText = await fetchWithRetry(firstUrl);
+    const firstText = await fetchWithProxy(firstUrl);
     
     if (firstText.trim().startsWith('<')) {
         throw new Error(parseXmlError(firstText));
@@ -473,7 +409,6 @@ export const fetchStoresInAdmin = async (adminCode: string, divId: string, onPro
     const totalPages = Math.ceil(totalCount / PAGE_SIZE);
     
     if (totalPages > 1) {
-        // Parallel fetching for speed
         const BATCH_SIZE = 6;
         let consecutiveErrors = 0;
 
@@ -483,9 +418,9 @@ export const fetchStoresInAdmin = async (adminCode: string, divId: string, onPro
 
             const promises = [];
             for (let page = i; page <= endPage; page++) {
-                const nextUrl = `${BASE_URL}/storeListInDong?divId=${divId}&key=${adminCode}&numOfRows=${PAGE_SIZE}&pageNo=${page}&serviceKey=${serviceKey}&type=json`;
+                const nextUrl = `${BASE_URL}/storeListInDong?divId=${divId}&key=${adminCode}&numOfRows=${PAGE_SIZE}&pageNo=${page}&serviceKey=${DATA_API_KEY}&type=json`;
                 promises.push(
-                    fetchWithRetry(nextUrl)
+                    fetchWithProxy(nextUrl)
                         .then(text => {
                              if (text.trim().startsWith('<')) return null;
                              const json = JSON.parse(text);
@@ -532,14 +467,13 @@ export const fetchSbizData = async (dongCd: string): Promise<SbizStats> => {
 
     try {
         const [maxSalesRes, deliveryRes, ageRankRes, populationRes] = await Promise.all([
-            fetchWithRetry(endpoints.maxSales).then(t => JSON.parse(t)).catch(() => null),
-            fetchWithRetry(endpoints.delivery).then(t => JSON.parse(t)).catch(() => null),
-            fetchWithRetry(endpoints.ageRank).then(t => JSON.parse(t)).catch(() => null),
-            fetchWithRetry(endpoints.population).then(t => JSON.parse(t)).catch(() => null)
+            fetchWithProxy(endpoints.maxSales).then(t => JSON.parse(t)).catch(() => null),
+            fetchWithProxy(endpoints.delivery).then(t => JSON.parse(t)).catch(() => null),
+            fetchWithProxy(endpoints.ageRank).then(t => JSON.parse(t)).catch(() => null),
+            fetchWithProxy(endpoints.population).then(t => JSON.parse(t)).catch(() => null)
         ]);
 
         const formatAge = (ageCode: string) => {
-             // M60 -> 60대, M40 -> 40대...
              if(!ageCode) return "정보없음";
              const ageNum = ageCode.replace(/[^0-9]/g, '');
              return ageNum ? `${ageNum}대` : ageCode;
@@ -552,7 +486,6 @@ export const fetchSbizData = async (dongCd: string): Promise<SbizStats> => {
             ageRank: null
         };
 
-        // 1. 유동인구 (cfrDynppl)
         if (populationRes && populationRes.data) {
             result.population = {
                 total: parseInt(populationRes.data.ppltn || "0").toLocaleString(),
@@ -560,17 +493,15 @@ export const fetchSbizData = async (dongCd: string): Promise<SbizStats> => {
             };
         }
 
-        // 2. 최대 매출 업종 (MaxSlsBiz)
         if (maxSalesRes && maxSalesRes.data) {
             result.maxSales = {
                 type: maxSalesRes.data.tpbizClscdNm,
-                amount: maxSalesRes.data.mmTotSlsAmt, // 단위: 만원
+                amount: maxSalesRes.data.mmTotSlsAmt,
                 percent: maxSalesRes.data.mmTotSlsAmtPercent,
                 date: maxSalesRes.data.crtrYm
             };
         }
 
-        // 3. 배달 (DlvyDay)
         if (deliveryRes && deliveryRes.data) {
             result.delivery = {
                 day: deliveryRes.data.days,
@@ -580,7 +511,6 @@ export const fetchSbizData = async (dongCd: string): Promise<SbizStats> => {
             };
         }
 
-        // 4. 방문 연령 (VstAgeRnk) - Sort to find Rank 1~5
         if (ageRankRes && Array.isArray(ageRankRes.data)) {
             const sorted = [...ageRankRes.data].sort((a: any, b: any) => b.pipcnt - a.pipcnt);
             result.ageRank = sorted.slice(0, 5).map(item => ({
@@ -597,24 +527,10 @@ export const fetchSbizData = async (dongCd: string): Promise<SbizStats> => {
     }
 };
 
-/**
- * 서울 열린데이터 광장 (행정동별 추정매출) 데이터 조회
- */
 export const fetchSeoulSalesData = async (adminCode: string): Promise<SeoulSalesData | null> => {
-    if (!SEOUL_DATA_KEY || SEOUL_DATA_KEY.startsWith("YOUR")) {
-        console.warn("서울 데이터 API 키가 없습니다.");
-        return null;
-    }
-
-    // 서울시 코드는 10자리 행정동 코드(11xxxxxxx)를 사용하지만, API 호출 시 확인 필요.
-    // VwsmAdstrdSelngW 서비스 호출
-    
-    // 최근 분기 추정 (현재 날짜 기준)
     const now = new Date();
     const currentYear = now.getFullYear();
 
-    // 20254(미래)부터 과거 2년치(8분기)를 후보군으로 설정하여 데이터가 있는 가장 최근 분기 검색
-    // 사용자가 '20254' 등 미래 날짜를 원할 경우를 대비해 올해 4분기부터 시작
     const targetQuarters = [];
     for(let y = currentYear; y >= currentYear - 1; y--) {
         for(let q = 4; q >= 1; q--) {
@@ -623,20 +539,14 @@ export const fetchSeoulSalesData = async (adminCode: string): Promise<SeoulSales
     }
 
     const serviceName = "VwsmAdstrdSelngW";
-    
-    // Aggregate result holder
     let aggregatedData: SeoulSalesData | null = null;
 
     for (const q of targetQuarters) {
-        // Format: KEY/json/Service/Start/End/YearQuarter/AdminCode
+        // Use placeholder for Seoul Key
         const url = `${SEOUL_BASE_URL}/${SEOUL_DATA_KEY}/json/${serviceName}/1/1000/${q}/${adminCode}`;
         
         try {
-            const jsonText = await fetchWithRetry(url);
-            
-            // Error handling for Seoul API
-            // Usually returns JSON like { VwsmAdstrdSelngW: { row: [...] } } or { RESULT: { CODE: ... } }
-            // Some error responses are valid JSON, some might be HTML/XML if key is wrong
+            const jsonText = await fetchWithProxy(url);
             
             let data: any;
             try {
@@ -649,11 +559,9 @@ export const fetchSeoulSalesData = async (adminCode: string): Promise<SeoulSales
             if (data.VwsmAdstrdSelngW && data.VwsmAdstrdSelngW.row) {
                 const rows = data.VwsmAdstrdSelngW.row;
                 if (rows.length > 0) {
-                    // Initialize Aggregation
                     aggregatedData = {
                         stdrYearQuarter: q,
-                        totalAmount: 0,
-                        totalCount: 0,
+                        totalAmount: 0, totalCount: 0,
                         weekdayAmount: 0, weekendAmount: 0,
                         weekdayCount: 0, weekendCount: 0,
                         dayAmount: { MON: 0, TUE: 0, WED: 0, THU: 0, FRI: 0, SAT: 0, SUN: 0 },
@@ -667,72 +575,22 @@ export const fetchSeoulSalesData = async (adminCode: string): Promise<SeoulSales
                     };
 
                     rows.forEach((row: any) => {
-                        // Amount & Count
                         aggregatedData!.totalAmount += row.TH_MON_SELNG_AMT + row.TH_TUE_SELNG_AMT + row.TH_WED_SELNG_AMT + row.TH_THU_SELNG_AMT + row.TH_FRI_SELNG_AMT + row.TH_SAT_SELNG_AMT + row.TH_SUN_SELNG_AMT;
                         aggregatedData!.totalCount += row.TH_MON_SELNG_CO + row.TH_TUE_SELNG_CO + row.TH_WED_SELNG_CO + row.TH_THU_SELNG_CO + row.TH_FRI_SELNG_CO + row.TH_SAT_SELNG_CO + row.TH_SUN_SELNG_CO;
-
-                        // Weekday vs Weekend
                         aggregatedData!.weekdayAmount += row.TH_MON_SELNG_AMT + row.TH_TUE_SELNG_AMT + row.TH_WED_SELNG_AMT + row.TH_THU_SELNG_AMT + row.TH_FRI_SELNG_AMT;
                         aggregatedData!.weekendAmount += row.TH_SAT_SELNG_AMT + row.TH_SUN_SELNG_AMT;
-                        
                         aggregatedData!.weekdayCount += row.TH_MON_SELNG_CO + row.TH_TUE_SELNG_CO + row.TH_WED_SELNG_CO + row.TH_THU_SELNG_CO + row.TH_FRI_SELNG_CO;
                         aggregatedData!.weekendCount += row.TH_SAT_SELNG_CO + row.TH_SUN_SELNG_CO;
-
-                        // Day of Week
-                        aggregatedData!.dayAmount.MON += row.TH_MON_SELNG_AMT;
-                        aggregatedData!.dayAmount.TUE += row.TH_TUE_SELNG_AMT;
-                        aggregatedData!.dayAmount.WED += row.TH_WED_SELNG_AMT;
-                        aggregatedData!.dayAmount.THU += row.TH_THU_SELNG_AMT;
-                        aggregatedData!.dayAmount.FRI += row.TH_FRI_SELNG_AMT;
-                        aggregatedData!.dayAmount.SAT += row.TH_SAT_SELNG_AMT;
-                        aggregatedData!.dayAmount.SUN += row.TH_SUN_SELNG_AMT;
-
-                        aggregatedData!.dayCount.MON += row.TH_MON_SELNG_CO;
-                        aggregatedData!.dayCount.TUE += row.TH_TUE_SELNG_CO;
-                        aggregatedData!.dayCount.WED += row.TH_WED_SELNG_CO;
-                        aggregatedData!.dayCount.THU += row.TH_THU_SELNG_CO;
-                        aggregatedData!.dayCount.FRI += row.TH_FRI_SELNG_CO;
-                        aggregatedData!.dayCount.SAT += row.TH_SAT_SELNG_CO;
-                        aggregatedData!.dayCount.SUN += row.TH_SUN_SELNG_CO;
-
-                        // Time Slot
-                        aggregatedData!.timeAmount["00_06"] += row.TMZN_00_06_SELNG_AMT;
-                        aggregatedData!.timeAmount["06_11"] += row.TMZN_06_11_SELNG_AMT;
-                        aggregatedData!.timeAmount["11_14"] += row.TMZN_11_14_SELNG_AMT;
-                        aggregatedData!.timeAmount["14_17"] += row.TMZN_14_17_SELNG_AMT;
-                        aggregatedData!.timeAmount["17_21"] += row.TMZN_17_21_SELNG_AMT;
-                        aggregatedData!.timeAmount["21_24"] += row.TMZN_21_24_SELNG_AMT;
-
-                        aggregatedData!.timeCount["00_06"] += row.TMZN_00_06_SELNG_CO;
-                        aggregatedData!.timeCount["06_11"] += row.TMZN_06_11_SELNG_CO;
-                        aggregatedData!.timeCount["11_14"] += row.TMZN_11_14_SELNG_CO;
-                        aggregatedData!.timeCount["14_17"] += row.TMZN_14_17_SELNG_CO;
-                        aggregatedData!.timeCount["17_21"] += row.TMZN_17_21_SELNG_CO;
-                        aggregatedData!.timeCount["21_24"] += row.TMZN_21_24_SELNG_CO;
-
-                        // Gender
-                        aggregatedData!.genderAmount.male += row.ML_SELNG_AMT;
-                        aggregatedData!.genderAmount.female += row.FML_SELNG_AMT;
-                        aggregatedData!.genderCount.male += row.ML_SELNG_CO;
-                        aggregatedData!.genderCount.female += row.FML_SELNG_CO;
-
-                        // Age
-                        aggregatedData!.ageAmount["10"] += row.AGRDE_10_SELNG_AMT;
-                        aggregatedData!.ageAmount["20"] += row.AGRDE_20_SELNG_AMT;
-                        aggregatedData!.ageAmount["30"] += row.AGRDE_30_SELNG_AMT;
-                        aggregatedData!.ageAmount["40"] += row.AGRDE_40_SELNG_AMT;
-                        aggregatedData!.ageAmount["50"] += row.AGRDE_50_SELNG_AMT;
-                        aggregatedData!.ageAmount["60"] += row.AGRDE_60_ABOVE_SELNG_AMT;
-
-                        aggregatedData!.ageCount["10"] += row.AGRDE_10_SELNG_CO;
-                        aggregatedData!.ageCount["20"] += row.AGRDE_20_SELNG_CO;
-                        aggregatedData!.ageCount["30"] += row.AGRDE_30_SELNG_CO;
-                        aggregatedData!.ageCount["40"] += row.AGRDE_40_SELNG_CO;
-                        aggregatedData!.ageCount["50"] += row.AGRDE_50_SELNG_CO;
-                        aggregatedData!.ageCount["60"] += row.AGRDE_60_ABOVE_SELNG_CO;
+                        aggregatedData!.dayAmount.MON += row.TH_MON_SELNG_AMT; aggregatedData!.dayAmount.TUE += row.TH_TUE_SELNG_AMT; aggregatedData!.dayAmount.WED += row.TH_WED_SELNG_AMT; aggregatedData!.dayAmount.THU += row.TH_THU_SELNG_AMT; aggregatedData!.dayAmount.FRI += row.TH_FRI_SELNG_AMT; aggregatedData!.dayAmount.SAT += row.TH_SAT_SELNG_AMT; aggregatedData!.dayAmount.SUN += row.TH_SUN_SELNG_AMT;
+                        aggregatedData!.dayCount.MON += row.TH_MON_SELNG_CO; aggregatedData!.dayCount.TUE += row.TH_TUE_SELNG_CO; aggregatedData!.dayCount.WED += row.TH_WED_SELNG_CO; aggregatedData!.dayCount.THU += row.TH_THU_SELNG_CO; aggregatedData!.dayCount.FRI += row.TH_FRI_SELNG_CO; aggregatedData!.dayCount.SAT += row.TH_SAT_SELNG_CO; aggregatedData!.dayCount.SUN += row.TH_SUN_SELNG_CO;
+                        aggregatedData!.timeAmount["00_06"] += row.TMZN_00_06_SELNG_AMT; aggregatedData!.timeAmount["06_11"] += row.TMZN_06_11_SELNG_AMT; aggregatedData!.timeAmount["11_14"] += row.TMZN_11_14_SELNG_AMT; aggregatedData!.timeAmount["14_17"] += row.TMZN_14_17_SELNG_AMT; aggregatedData!.timeAmount["17_21"] += row.TMZN_17_21_SELNG_AMT; aggregatedData!.timeAmount["21_24"] += row.TMZN_21_24_SELNG_AMT;
+                        aggregatedData!.timeCount["00_06"] += row.TMZN_00_06_SELNG_CO; aggregatedData!.timeCount["06_11"] += row.TMZN_06_11_SELNG_CO; aggregatedData!.timeCount["11_14"] += row.TMZN_11_14_SELNG_CO; aggregatedData!.timeCount["14_17"] += row.TMZN_14_17_SELNG_CO; aggregatedData!.timeCount["17_21"] += row.TMZN_17_21_SELNG_CO; aggregatedData!.timeCount["21_24"] += row.TMZN_21_24_SELNG_CO;
+                        aggregatedData!.genderAmount.male += row.ML_SELNG_AMT; aggregatedData!.genderAmount.female += row.FML_SELNG_AMT;
+                        aggregatedData!.genderCount.male += row.ML_SELNG_CO; aggregatedData!.genderCount.female += row.FML_SELNG_CO;
+                        aggregatedData!.ageAmount["10"] += row.AGRDE_10_SELNG_AMT; aggregatedData!.ageAmount["20"] += row.AGRDE_20_SELNG_AMT; aggregatedData!.ageAmount["30"] += row.AGRDE_30_SELNG_AMT; aggregatedData!.ageAmount["40"] += row.AGRDE_40_SELNG_AMT; aggregatedData!.ageAmount["50"] += row.AGRDE_50_SELNG_AMT; aggregatedData!.ageAmount["60"] += row.AGRDE_60_ABOVE_SELNG_AMT;
+                        aggregatedData!.ageCount["10"] += row.AGRDE_10_SELNG_CO; aggregatedData!.ageCount["20"] += row.AGRDE_20_SELNG_CO; aggregatedData!.ageCount["30"] += row.AGRDE_30_SELNG_CO; aggregatedData!.ageCount["40"] += row.AGRDE_40_SELNG_CO; aggregatedData!.ageCount["50"] += row.AGRDE_50_SELNG_CO; aggregatedData!.ageCount["60"] += row.AGRDE_60_ABOVE_SELNG_CO;
                     });
                     
-                    // Break after successful fetch and aggregation
                     break;
                 }
             }
@@ -744,18 +602,13 @@ export const fetchSeoulSalesData = async (adminCode: string): Promise<SeoulSales
     return aggregatedData;
 };
 
-/**
- * 좌표(위경도)를 행정동 코드로 변환 (Reverse Geocoding)
- * V-World API 사용
- */
 export const getAdminCodeFromCoords = async (lat: number, lon: number): Promise<string | null> => {
-    if (!VWORLD_KEY || VWORLD_KEY.startsWith("YOUR")) return null;
-    
-    // Using V-World Reverse Geocoding via JSONP
+    // Replaced JSONP with fetchWithProxy for V-World Reverse Geocoding
     const url = `https://api.vworld.kr/req/address?service=address&request=getAddress&version=2.0&crs=EPSG:4326&point=${lon},${lat}&format=json&type=PARCEL&zipcode=false&simple=false&key=${VWORLD_KEY}`;
     
     try {
-        const data = await fetchJsonp(url);
+        const text = await fetchWithProxy(url);
+        const data = JSON.parse(text);
         if (data.response && data.response.status === "OK") {
             const result = data.response.result;
             if (result && result.length > 0) {
