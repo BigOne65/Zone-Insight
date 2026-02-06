@@ -572,69 +572,125 @@ export const fetchSeoulSalesData = async (adminCode: string): Promise<SeoulSales
         }
     }
 
-    const serviceName = "VwsmAdstrdSelngW";
+    // 서비스명 변경: 'VwsmAdstrdSelngW' -> 'VwsmAdstrdSelngQq' (표준 분기 데이터)
+    const serviceName = "VwsmAdstrdSelngQq";
     let aggregatedData: SeoulSalesData | null = null;
     const industryMap: Record<string, SeoulSalesData> = {};
 
+    // 안전한 숫자 파싱 함수 (undefined/null -> 0)
+    const getNum = (v: any) => {
+        const n = Number(v);
+        return isNaN(n) ? 0 : n;
+    };
+
     // Helper to accumulate row data into a target SeoulSalesData object
     const accumulateRow = (target: SeoulSalesData, row: any) => {
-        target.totalAmount += row.TH_MON_SELNG_AMT + row.TH_TUE_SELNG_AMT + row.TH_WED_SELNG_AMT + row.TH_THU_SELNG_AMT + row.TH_FRI_SELNG_AMT + row.TH_SAT_SELNG_AMT + row.TH_SUN_SELNG_AMT;
-        target.totalCount += row.TH_MON_SELNG_CO + row.TH_TUE_SELNG_CO + row.TH_WED_SELNG_CO + row.TH_THU_SELNG_CO + row.TH_FRI_SELNG_CO + row.TH_SAT_SELNG_CO + row.TH_SUN_SELNG_CO;
+        const monAmt = getNum(row.TH_MON_SELNG_AMT);
+        const tueAmt = getNum(row.TH_TUE_SELNG_AMT);
+        const wedAmt = getNum(row.TH_WED_SELNG_AMT);
+        const thuAmt = getNum(row.TH_THU_SELNG_AMT);
+        const friAmt = getNum(row.TH_FRI_SELNG_AMT);
+        const satAmt = getNum(row.TH_SAT_SELNG_AMT);
+        const sunAmt = getNum(row.TH_SUN_SELNG_AMT);
 
-        target.weekdayAmount += row.TH_MON_SELNG_AMT + row.TH_TUE_SELNG_AMT + row.TH_WED_SELNG_AMT + row.TH_THU_SELNG_AMT + row.TH_FRI_SELNG_AMT;
-        target.weekendAmount += row.TH_SAT_SELNG_AMT + row.TH_SUN_SELNG_AMT;
+        const monCo = getNum(row.TH_MON_SELNG_CO);
+        const tueCo = getNum(row.TH_TUE_SELNG_CO);
+        const wedCo = getNum(row.TH_WED_SELNG_CO);
+        const thuCo = getNum(row.TH_THU_SELNG_CO);
+        const friCo = getNum(row.TH_FRI_SELNG_CO);
+        const satCo = getNum(row.TH_SAT_SELNG_CO);
+        const sunCo = getNum(row.TH_SUN_SELNG_CO);
+
+        target.totalAmount += monAmt + tueAmt + wedAmt + thuAmt + friAmt + satAmt + sunAmt;
+        target.totalCount += monCo + tueCo + wedCo + thuCo + friCo + satCo + sunCo;
+
+        target.weekdayAmount += monAmt + tueAmt + wedAmt + thuAmt + friAmt;
+        target.weekendAmount += satAmt + sunAmt;
         
-        target.weekdayCount += row.TH_MON_SELNG_CO + row.TH_TUE_SELNG_CO + row.TH_WED_SELNG_CO + row.TH_THU_SELNG_CO + row.TH_FRI_SELNG_CO;
-        target.weekendCount += row.TH_SAT_SELNG_CO + row.TH_SUN_SELNG_CO;
+        target.weekdayCount += monCo + tueCo + wedCo + thuCo + friCo;
+        target.weekendCount += satCo + sunCo;
 
-        target.dayAmount.MON += row.TH_MON_SELNG_AMT;
-        target.dayAmount.TUE += row.TH_TUE_SELNG_AMT;
-        target.dayAmount.WED += row.TH_WED_SELNG_AMT;
-        target.dayAmount.THU += row.TH_THU_SELNG_AMT;
-        target.dayAmount.FRI += row.TH_FRI_SELNG_AMT;
-        target.dayAmount.SAT += row.TH_SAT_SELNG_AMT;
-        target.dayAmount.SUN += row.TH_SUN_SELNG_AMT;
+        target.dayAmount.MON += monAmt;
+        target.dayAmount.TUE += tueAmt;
+        target.dayAmount.WED += wedAmt;
+        target.dayAmount.THU += thuAmt;
+        target.dayAmount.FRI += friAmt;
+        target.dayAmount.SAT += satAmt;
+        target.dayAmount.SUN += sunAmt;
 
-        target.dayCount.MON += row.TH_MON_SELNG_CO;
-        target.dayCount.TUE += row.TH_TUE_SELNG_CO;
-        target.dayCount.WED += row.TH_WED_SELNG_CO;
-        target.dayCount.THU += row.TH_THU_SELNG_CO;
-        target.dayCount.FRI += row.TH_FRI_SELNG_CO;
-        target.dayCount.SAT += row.TH_SAT_SELNG_CO;
-        target.dayCount.SUN += row.TH_SUN_SELNG_CO;
+        target.dayCount.MON += monCo;
+        target.dayCount.TUE += tueCo;
+        target.dayCount.WED += wedCo;
+        target.dayCount.THU += thuCo;
+        target.dayCount.FRI += friCo;
+        target.dayCount.SAT += satCo;
+        target.dayCount.SUN += sunCo;
 
-        target.timeAmount["00_06"] += row.TMZN_00_06_SELNG_AMT;
-        target.timeAmount["06_11"] += row.TMZN_06_11_SELNG_AMT;
-        target.timeAmount["11_14"] += row.TMZN_11_14_SELNG_AMT;
-        target.timeAmount["14_17"] += row.TMZN_14_17_SELNG_AMT;
-        target.timeAmount["17_21"] += row.TMZN_17_21_SELNG_AMT;
-        target.timeAmount["21_24"] += row.TMZN_21_24_SELNG_AMT;
+        const t0006Amt = getNum(row.TMZN_00_06_SELNG_AMT);
+        const t0611Amt = getNum(row.TMZN_06_11_SELNG_AMT);
+        const t1114Amt = getNum(row.TMZN_11_14_SELNG_AMT);
+        const t1417Amt = getNum(row.TMZN_14_17_SELNG_AMT);
+        const t1721Amt = getNum(row.TMZN_17_21_SELNG_AMT);
+        const t2124Amt = getNum(row.TMZN_21_24_SELNG_AMT);
 
-        target.timeCount["00_06"] += row.TMZN_00_06_SELNG_CO;
-        target.timeCount["06_11"] += row.TMZN_06_11_SELNG_CO;
-        target.timeCount["11_14"] += row.TMZN_11_14_SELNG_CO;
-        target.timeCount["14_17"] += row.TMZN_14_17_SELNG_CO;
-        target.timeCount["17_21"] += row.TMZN_17_21_SELNG_CO;
-        target.timeCount["21_24"] += row.TMZN_21_24_SELNG_CO;
+        const t0006Co = getNum(row.TMZN_00_06_SELNG_CO);
+        const t0611Co = getNum(row.TMZN_06_11_SELNG_CO);
+        const t1114Co = getNum(row.TMZN_11_14_SELNG_CO);
+        const t1417Co = getNum(row.TMZN_14_17_SELNG_CO);
+        const t1721Co = getNum(row.TMZN_17_21_SELNG_CO);
+        const t2124Co = getNum(row.TMZN_21_24_SELNG_CO);
 
-        target.genderAmount.male += row.ML_SELNG_AMT;
-        target.genderAmount.female += row.FML_SELNG_AMT;
-        target.genderCount.male += row.ML_SELNG_CO;
-        target.genderCount.female += row.FML_SELNG_CO;
+        target.timeAmount["00_06"] += t0006Amt;
+        target.timeAmount["06_11"] += t0611Amt;
+        target.timeAmount["11_14"] += t1114Amt;
+        target.timeAmount["14_17"] += t1417Amt;
+        target.timeAmount["17_21"] += t1721Amt;
+        target.timeAmount["21_24"] += t2124Amt;
 
-        target.ageAmount["10"] += row.AGRDE_10_SELNG_AMT;
-        target.ageAmount["20"] += row.AGRDE_20_SELNG_AMT;
-        target.ageAmount["30"] += row.AGRDE_30_SELNG_AMT;
-        target.ageAmount["40"] += row.AGRDE_40_SELNG_AMT;
-        target.ageAmount["50"] += row.AGRDE_50_SELNG_AMT;
-        target.ageAmount["60"] += row.AGRDE_60_ABOVE_SELNG_AMT;
+        target.timeCount["00_06"] += t0006Co;
+        target.timeCount["06_11"] += t0611Co;
+        target.timeCount["11_14"] += t1114Co;
+        target.timeCount["14_17"] += t1417Co;
+        target.timeCount["17_21"] += t1721Co;
+        target.timeCount["21_24"] += t2124Co;
 
-        target.ageCount["10"] += row.AGRDE_10_SELNG_CO;
-        target.ageCount["20"] += row.AGRDE_20_SELNG_CO;
-        target.ageCount["30"] += row.AGRDE_30_SELNG_CO;
-        target.ageCount["40"] += row.AGRDE_40_SELNG_CO;
-        target.ageCount["50"] += row.AGRDE_50_SELNG_CO;
-        target.ageCount["60"] += row.AGRDE_60_ABOVE_SELNG_CO;
+        const mlAmt = getNum(row.ML_SELNG_AMT);
+        const fmlAmt = getNum(row.FML_SELNG_AMT);
+        const mlCo = getNum(row.ML_SELNG_CO);
+        const fmlCo = getNum(row.FML_SELNG_CO);
+
+        target.genderAmount.male += mlAmt;
+        target.genderAmount.female += fmlAmt;
+        target.genderCount.male += mlCo;
+        target.genderCount.female += fmlCo;
+
+        const a10Amt = getNum(row.AGRDE_10_SELNG_AMT);
+        const a20Amt = getNum(row.AGRDE_20_SELNG_AMT);
+        const a30Amt = getNum(row.AGRDE_30_SELNG_AMT);
+        const a40Amt = getNum(row.AGRDE_40_SELNG_AMT);
+        const a50Amt = getNum(row.AGRDE_50_SELNG_AMT);
+        const a60Amt = getNum(row.AGRDE_60_ABOVE_SELNG_AMT);
+
+        const a10Co = getNum(row.AGRDE_10_SELNG_CO);
+        const a20Co = getNum(row.AGRDE_20_SELNG_CO);
+        const a30Co = getNum(row.AGRDE_30_SELNG_CO);
+        const a40Co = getNum(row.AGRDE_40_SELNG_CO);
+        const a50Co = getNum(row.AGRDE_50_SELNG_CO);
+        const a60Co = getNum(row.AGRDE_60_ABOVE_SELNG_CO);
+
+        target.ageAmount["10"] += a10Amt;
+        target.ageAmount["20"] += a20Amt;
+        target.ageAmount["30"] += a30Amt;
+        target.ageAmount["40"] += a40Amt;
+        target.ageAmount["50"] += a50Amt;
+        target.ageAmount["60"] += a60Amt;
+
+        target.ageCount["10"] += a10Co;
+        target.ageCount["20"] += a20Co;
+        target.ageCount["30"] += a30Co;
+        target.ageCount["40"] += a40Co;
+        target.ageCount["50"] += a50Co;
+        target.ageCount["60"] += a60Co;
     };
 
     const createEmptyData = (quarter: string, serviceName?: string): SeoulSalesData => ({
@@ -666,8 +722,11 @@ export const fetchSeoulSalesData = async (adminCode: string): Promise<SeoulSales
                 continue; 
             }
 
-            if (data.VwsmAdstrdSelngW && data.VwsmAdstrdSelngW.row) {
-                const rows = data.VwsmAdstrdSelngW.row;
+            // Response Key check
+            const responseData = data[serviceName];
+
+            if (responseData && responseData.row) {
+                const rows = responseData.row;
                 if (rows.length > 0) {
                     // Initialize Total Aggregation
                     aggregatedData = createEmptyData(q);
