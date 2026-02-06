@@ -8,25 +8,6 @@ const PROJ_WGS84 = 'EPSG:4326';
 // SGIS uses UTM-K (GRS80)
 const PROJ_5179 = "+proj=tmerc +lat_0=38 +lon_0=127.5 +k=0.9996 +x_0=1000000 +y_0=2000000 +ellps=GRS80 +towgs84=0,0,0,0,0,0,0 +units=m +no_defs";
 
-// --- Debug System ---
-type DebugCallback = (url: string) => void;
-const debugListeners: DebugCallback[] = [];
-
-/**
- * API 요청 URL을 구독하는 리스너 등록 함수
- */
-export const onDebugUrl = (callback: DebugCallback) => {
-    debugListeners.push(callback);
-    return () => {
-        const idx = debugListeners.indexOf(callback);
-        if (idx !== -1) debugListeners.splice(idx, 1);
-    };
-};
-
-const notifyDebug = (url: string) => {
-    debugListeners.forEach(cb => cb(url));
-};
-
 /**
  * 환경 변수 로드 헬퍼
  */
@@ -44,7 +25,6 @@ const DATA_API_KEY = getEnvVar("VITE_DATA_API_KEY");
 const VWORLD_KEY = getEnvVar("VITE_VWORLD_KEY");
 const SGIS_ID = getEnvVar("VITE_SGIS_SERVICE_ID");
 const SGIS_SECRET = getEnvVar("VITE_SGIS_SECRET_KEY");
-const SEOUL_DATA_KEY = getEnvVar("VITE_SEOUL_DATA_KEY");
 
 // API Endpoints (Using Local Proxy via vite.config.ts or vercel.json)
 // V-World supports JSONP/CORS natively, so we keep it direct.
@@ -53,7 +33,6 @@ const VWORLD_BASE_URL = "https://api.vworld.kr/req/search";
 // Proxied Endpoints
 const BASE_URL = "/api/public";
 const SGIS_BASE_URL = "/api/sgis";
-const SEOUL_BASE_URL = "/api/seoul";
 const SBIZ_BASE_URL_PROXY = "/api/sbiz";
 
 // --- Cache ---
@@ -85,7 +64,6 @@ const parseXmlError = (text: string) => {
 // --- Network Helpers ---
 
 const fetchJsonp = (url: string, callbackParam = 'callback'): Promise<any> => {
-    notifyDebug(url);
     return new Promise((resolve, reject) => {
         const script = document.createElement('script');
         const callbackName = `jsonp_callback_${Math.round(100000 * Math.random())}`;
@@ -112,7 +90,6 @@ const fetchJsonp = (url: string, callbackParam = 'callback'): Promise<any> => {
  * No longer requires external proxies. Vercel/Vite handles CORS.
  */
 const fetchStandard = async (url: string): Promise<string> => {
-    notifyDebug(url);
     try {
         const response = await fetch(url);
         if (!response.ok) {
@@ -576,143 +553,11 @@ export const fetchSbizData = async (dongCd: string): Promise<SbizStats> => {
 
 /**
  * 서울 열린데이터 광장 (행정동별 추정매출) 데이터 조회
+ * API 대신 CSV 파일(seoul_sales_202503.csv)을 public 폴더에서 로드하여
+ * ADSTRD_CD(행정동 코드)가 일치하는 행만 필터링합니다.
  */
 export const fetchSeoulSalesData = async (adminCode: string): Promise<SeoulSalesData | null> => {
-    if (!SEOUL_DATA_KEY) {
-        console.warn("서울 데이터 API 키가 없습니다.");
-        return null;
-    }
-
-    const now = new Date();
-    const currentYear = now.getFullYear();
-
-    const targetQuarters = [];
-    for(let y = currentYear; y >= currentYear - 1; y--) {
-        for(let q = 4; q >= 1; q--) {
-            // YYYYQ 형식으로 저장 (예: 20231)
-            targetQuarters.push(`${y}${q}`);
-        }
-    }
-
-    const serviceName = "VwsmAdstrdSelngW";
-    let aggregatedData: SeoulSalesData | null = null;
-    const industryMap: Record<string, SeoulSalesData> = {};
-
-    // 안전한 숫자 파싱 함수 (undefined/null -> 0)
-    const getNum = (v: any) => {
-        const n = Number(v);
-        return isNaN(n) ? 0 : n;
-    };
-
-    // Helper to accumulate row data into a target SeoulSalesData object
-    const accumulateRow = (target: SeoulSalesData, row: any) => {
-        const monAmt = getNum(row.TH_MON_SELNG_AMT);
-        const tueAmt = getNum(row.TH_TUE_SELNG_AMT);
-        const wedAmt = getNum(row.TH_WED_SELNG_AMT);
-        const thuAmt = getNum(row.TH_THU_SELNG_AMT);
-        const friAmt = getNum(row.TH_FRI_SELNG_AMT);
-        const satAmt = getNum(row.TH_SAT_SELNG_AMT);
-        const sunAmt = getNum(row.TH_SUN_SELNG_AMT);
-
-        const monCo = getNum(row.TH_MON_SELNG_CO);
-        const tueCo = getNum(row.TH_TUE_SELNG_CO);
-        const wedCo = getNum(row.TH_WED_SELNG_CO);
-        const thuCo = getNum(row.TH_THU_SELNG_CO);
-        const friCo = getNum(row.TH_FRI_SELNG_CO);
-        const satCo = getNum(row.TH_SAT_SELNG_CO);
-        const sunCo = getNum(row.TH_SUN_SELNG_CO);
-
-        target.totalAmount += monAmt + tueAmt + wedAmt + thuAmt + friAmt + satAmt + sunAmt;
-        target.totalCount += monCo + tueCo + wedCo + thuCo + friCo + satCo + sunCo;
-
-        target.weekdayAmount += monAmt + tueAmt + wedAmt + thuAmt + friAmt;
-        target.weekendAmount += satAmt + sunAmt;
-        
-        target.weekdayCount += monCo + tueCo + wedCo + thuCo + friCo;
-        target.weekendCount += satCo + sunCo;
-
-        target.dayAmount.MON += monAmt;
-        target.dayAmount.TUE += tueAmt;
-        target.dayAmount.WED += wedAmt;
-        target.dayAmount.THU += thuAmt;
-        target.dayAmount.FRI += friAmt;
-        target.dayAmount.SAT += satAmt;
-        target.dayAmount.SUN += sunAmt;
-
-        target.dayCount.MON += monCo;
-        target.dayCount.TUE += tueCo;
-        target.dayCount.WED += wedCo;
-        target.dayCount.THU += thuCo;
-        target.dayCount.FRI += friCo;
-        target.dayCount.SAT += satCo;
-        target.dayCount.SUN += sunCo;
-
-        const t0006Amt = getNum(row.TMZN_00_06_SELNG_AMT);
-        const t0611Amt = getNum(row.TMZN_06_11_SELNG_AMT);
-        const t1114Amt = getNum(row.TMZN_11_14_SELNG_AMT);
-        const t1417Amt = getNum(row.TMZN_14_17_SELNG_AMT);
-        const t1721Amt = getNum(row.TMZN_17_21_SELNG_AMT);
-        const t2124Amt = getNum(row.TMZN_21_24_SELNG_AMT);
-
-        const t0006Co = getNum(row.TMZN_00_06_SELNG_CO);
-        const t0611Co = getNum(row.TMZN_06_11_SELNG_CO);
-        const t1114Co = getNum(row.TMZN_11_14_SELNG_CO);
-        const t1417Co = getNum(row.TMZN_14_17_SELNG_CO);
-        const t1721Co = getNum(row.TMZN_17_21_SELNG_CO);
-        const t2124Co = getNum(row.TMZN_21_24_SELNG_CO);
-
-        target.timeAmount["00_06"] += t0006Amt;
-        target.timeAmount["06_11"] += t0611Amt;
-        target.timeAmount["11_14"] += t1114Amt;
-        target.timeAmount["14_17"] += t1417Amt;
-        target.timeAmount["17_21"] += t1721Amt;
-        target.timeAmount["21_24"] += t2124Amt;
-
-        target.timeCount["00_06"] += t0006Co;
-        target.timeCount["06_11"] += t0611Co;
-        target.timeCount["11_14"] += t1114Co;
-        target.timeCount["14_17"] += t1417Co;
-        target.timeCount["17_21"] += t1721Co;
-        target.timeCount["21_24"] += t2124Co;
-
-        const mlAmt = getNum(row.ML_SELNG_AMT);
-        const fmlAmt = getNum(row.FML_SELNG_AMT);
-        const mlCo = getNum(row.ML_SELNG_CO);
-        const fmlCo = getNum(row.FML_SELNG_CO);
-
-        target.genderAmount.male += mlAmt;
-        target.genderAmount.female += fmlAmt;
-        target.genderCount.male += mlCo;
-        target.genderCount.female += fmlCo;
-
-        const a10Amt = getNum(row.AGRDE_10_SELNG_AMT);
-        const a20Amt = getNum(row.AGRDE_20_SELNG_AMT);
-        const a30Amt = getNum(row.AGRDE_30_SELNG_AMT);
-        const a40Amt = getNum(row.AGRDE_40_SELNG_AMT);
-        const a50Amt = getNum(row.AGRDE_50_SELNG_AMT);
-        const a60Amt = getNum(row.AGRDE_60_ABOVE_SELNG_AMT);
-
-        const a10Co = getNum(row.AGRDE_10_SELNG_CO);
-        const a20Co = getNum(row.AGRDE_20_SELNG_CO);
-        const a30Co = getNum(row.AGRDE_30_SELNG_CO);
-        const a40Co = getNum(row.AGRDE_40_SELNG_CO);
-        const a50Co = getNum(row.AGRDE_50_SELNG_CO);
-        const a60Co = getNum(row.AGRDE_60_ABOVE_SELNG_CO);
-
-        target.ageAmount["10"] += a10Amt;
-        target.ageAmount["20"] += a20Amt;
-        target.ageAmount["30"] += a30Amt;
-        target.ageAmount["40"] += a40Amt;
-        target.ageAmount["50"] += a50Amt;
-        target.ageAmount["60"] += a60Amt;
-
-        target.ageCount["10"] += a10Co;
-        target.ageCount["20"] += a20Co;
-        target.ageCount["30"] += a30Co;
-        target.ageCount["40"] += a40Co;
-        target.ageCount["50"] += a50Co;
-        target.ageCount["60"] += a60Co;
-    };
+    const csvUrl = "/seoul_sales_202503.csv"; // public folder
 
     const createEmptyData = (quarter: string, serviceName?: string): SeoulSalesData => ({
         stdrYearQuarter: quarter,
@@ -731,59 +576,138 @@ export const fetchSeoulSalesData = async (adminCode: string): Promise<SeoulSales
         ageCount: { "10": 0, "20": 0, "30": 0, "40": 0, "50": 0, "60": 0 }
     });
 
-    for (const q of targetQuarters) {
-        // q는 YYYYQ 형태 (예: 20231)
-        
-        // 올바른 API URL: KEY/TYPE/SERVICE/START/END/YYYYQ
-        // adminCode 파라미터는 API 명세에 없으므로 URL에서 제거하고 결과값에서 필터링합니다.
-        const url = `${SEOUL_BASE_URL}/${SEOUL_DATA_KEY}/json/${serviceName}/1/1000/${q}`;
-        
-        try {
-            const jsonText = await fetchStandard(url);
-            let data: any;
-            try {
-                data = JSON.parse(jsonText);
-            } catch (e) {
-                continue; 
-            }
-
-            // Response Key check
-            const responseData = data[serviceName];
-
-            if (responseData && responseData.row) {
-                const rows = responseData.row;
-                
-                // 사용자가 요청한 행정동 코드(ADSTRD_CD)와 일치하는 데이터만 필터링
-                // (URL 파라미터가 무시되어 전체 데이터가 내려오는 경우 대비)
-                const validRows = rows.filter((r: any) => !r.ADSTRD_CD || String(r.ADSTRD_CD) === String(adminCode));
-
-                if (validRows.length > 0) {
-                    // Initialize Total Aggregation
-                    aggregatedData = createEmptyData(q);
-
-                    validRows.forEach((row: any) => {
-                        // 1. Accumulate to Total
-                        accumulateRow(aggregatedData!, row);
-
-                        // 2. Accumulate to Industry Specific
-                        const svcName = row.SVC_INDUTY_CD_NM;
-                        if (!industryMap[svcName]) {
-                            industryMap[svcName] = createEmptyData(q, svcName);
-                        }
-                        accumulateRow(industryMap[svcName], row);
-                    });
-                    
-                    // Attach grouped industry data to the result
-                    aggregatedData.byIndustry = Object.values(industryMap).sort((a, b) => b.totalAmount - a.totalAmount);
-                    break;
-                }
-            }
-        } catch (e) {
-            // Ignore
+    try {
+        const response = await fetch(csvUrl);
+        if (!response.ok) {
+            console.warn("CSV File Fetch Failed");
+            return null;
         }
-    }
+        const text = await response.text();
+        const lines = text.split(/\r?\n/);
+        
+        if (lines.length < 2) return null;
 
-    return aggregatedData;
+        const headers = lines[0].split(',').map(h => h.trim());
+        const getIdx = (colName: string) => headers.indexOf(colName);
+
+        // Header Indices
+        const ADSTRD_CD = getIdx("ADSTRD_CD");
+        const SVC_NM = getIdx("SVC_INDUTY_CD_NM");
+        
+        // Data structure to return
+        // Default Quarter assumed 2025 Q3 since the file name is such
+        let aggregatedData = createEmptyData("20253");
+        const industryMap: Record<string, SeoulSalesData> = {};
+
+        const getNum = (row: string[], colName: string) => {
+             const idx = getIdx(colName);
+             if(idx === -1) return 0;
+             const val = parseFloat(row[idx]);
+             return isNaN(val) ? 0 : val;
+        };
+
+        const accumulateRow = (target: SeoulSalesData, row: string[]) => {
+            // Totals
+            target.totalAmount += getNum(row, "THSMON_SELNG_AMT");
+            target.totalCount += getNum(row, "THSMON_SELNG_CO");
+
+            // Weekday/Weekend
+            target.weekdayAmount += getNum(row, "MDWK_SELNG_AMT");
+            target.weekendAmount += getNum(row, "WKEND_SELNG_AMT");
+            target.weekdayCount += getNum(row, "MDWK_SELNG_CO");
+            target.weekendCount += getNum(row, "WKEND_SELNG_CO");
+
+            // Days
+            target.dayAmount.MON += getNum(row, "MON_SELNG_AMT");
+            target.dayAmount.TUE += getNum(row, "TUES_SELNG_AMT");
+            target.dayAmount.WED += getNum(row, "WED_SELNG_AMT");
+            target.dayAmount.THU += getNum(row, "THUR_SELNG_AMT");
+            target.dayAmount.FRI += getNum(row, "FRI_SELNG_AMT");
+            target.dayAmount.SAT += getNum(row, "SAT_SELNG_AMT");
+            target.dayAmount.SUN += getNum(row, "SUN_SELNG_AMT");
+
+            target.dayCount.MON += getNum(row, "MON_SELNG_CO");
+            target.dayCount.TUE += getNum(row, "TUES_SELNG_CO");
+            target.dayCount.WED += getNum(row, "WED_SELNG_CO");
+            target.dayCount.THU += getNum(row, "THUR_SELNG_CO");
+            target.dayCount.FRI += getNum(row, "FRI_SELNG_CO");
+            target.dayCount.SAT += getNum(row, "SAT_SELNG_CO");
+            target.dayCount.SUN += getNum(row, "SUN_SELNG_CO");
+
+            // Times
+            target.timeAmount["00_06"] += getNum(row, "TMZN_00_06_SELNG_AMT");
+            target.timeAmount["06_11"] += getNum(row, "TMZN_06_11_SELNG_AMT");
+            target.timeAmount["11_14"] += getNum(row, "TMZN_11_14_SELNG_AMT");
+            target.timeAmount["14_17"] += getNum(row, "TMZN_14_17_SELNG_AMT");
+            target.timeAmount["17_21"] += getNum(row, "TMZN_17_21_SELNG_AMT");
+            target.timeAmount["21_24"] += getNum(row, "TMZN_21_24_SELNG_AMT");
+
+            target.timeCount["00_06"] += getNum(row, "TMZN_00_06_SELNG_CO");
+            target.timeCount["06_11"] += getNum(row, "TMZN_06_11_SELNG_CO");
+            target.timeCount["11_14"] += getNum(row, "TMZN_11_14_SELNG_CO");
+            target.timeCount["14_17"] += getNum(row, "TMZN_14_17_SELNG_CO");
+            target.timeCount["17_21"] += getNum(row, "TMZN_17_21_SELNG_CO");
+            target.timeCount["21_24"] += getNum(row, "TMZN_21_24_SELNG_CO");
+
+            // Gender
+            target.genderAmount.male += getNum(row, "ML_SELNG_AMT");
+            target.genderAmount.female += getNum(row, "FML_SELNG_AMT");
+            target.genderCount.male += getNum(row, "ML_SELNG_CO");
+            target.genderCount.female += getNum(row, "FML_SELNG_CO");
+
+            // Age
+            target.ageAmount["10"] += getNum(row, "AGRDE_10_SELNG_AMT");
+            target.ageAmount["20"] += getNum(row, "AGRDE_20_SELNG_AMT");
+            target.ageAmount["30"] += getNum(row, "AGRDE_30_SELNG_AMT");
+            target.ageAmount["40"] += getNum(row, "AGRDE_40_SELNG_AMT");
+            target.ageAmount["50"] += getNum(row, "AGRDE_50_SELNG_AMT");
+            target.ageAmount["60"] += getNum(row, "AGRDE_60_ABOVE_SELNG_AMT");
+
+            target.ageCount["10"] += getNum(row, "AGRDE_10_SELNG_CO");
+            target.ageCount["20"] += getNum(row, "AGRDE_20_SELNG_CO");
+            target.ageCount["30"] += getNum(row, "AGRDE_30_SELNG_CO");
+            target.ageCount["40"] += getNum(row, "AGRDE_40_SELNG_CO");
+            target.ageCount["50"] += getNum(row, "AGRDE_50_SELNG_CO");
+            target.ageCount["60"] += getNum(row, "AGRDE_60_ABOVE_SELNG_CO");
+        };
+        
+        // If ADSTRD_CD column missing, can't filter
+        if (ADSTRD_CD === -1) return null;
+
+        let hasData = false;
+        
+        // Loop lines
+        for(let i=1; i<lines.length; i++) {
+            const row = lines[i].split(','); // Assuming standard CSV without quoted commas for now
+            if (row.length < headers.length) continue;
+            
+            // CSV ADSTRD_CD might be string, compare with adminCode
+            const rowAdminCode = row[ADSTRD_CD];
+            
+            // Check match
+            if (String(rowAdminCode) === String(adminCode)) {
+                hasData = true;
+                accumulateRow(aggregatedData, row);
+                
+                // Industry Data
+                const svcName = SVC_NM !== -1 ? row[SVC_NM] : "기타";
+                if (!industryMap[svcName]) {
+                    industryMap[svcName] = createEmptyData("20253", svcName);
+                }
+                accumulateRow(industryMap[svcName], row);
+            }
+        }
+
+        if (!hasData) return null;
+
+        // Finalize
+        aggregatedData.byIndustry = Object.values(industryMap).sort((a, b) => b.totalAmount - a.totalAmount);
+        return aggregatedData;
+
+    } catch (e) {
+        console.warn("CSV Process Error:", e);
+        return null;
+    }
 };
 
 export const getAdminCodeFromCoords = async (lat: number, lon: number): Promise<string | null> => {

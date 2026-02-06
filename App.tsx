@@ -3,7 +3,7 @@ import { PieChart, Pie, Cell, BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveCo
 import * as Icons from './components/Icons';
 import TradeMap from './components/Map';
 import GoogleAd from './components/GoogleAd';
-import { searchAddress, searchZones, fetchStores, searchAdminDistrict, fetchStoresInAdmin, fetchLocalAdminPolygon, fetchSbizData, fetchSeoulSalesData, getAdminCodeFromCoords, onDebugUrl } from './services/api';
+import { searchAddress, searchZones, fetchStores, searchAdminDistrict, fetchStoresInAdmin, fetchLocalAdminPolygon, fetchSbizData, fetchSeoulSalesData, getAdminCodeFromCoords } from './services/api';
 import { Zone, Store, StoreStats, SbizStats, SeoulSalesData } from './types';
 
 // Constants
@@ -96,15 +96,6 @@ const App: React.FC = () => {
 
   // Sales Tab State
   const [salesViewMode, setSalesViewMode] = useState<'amount' | 'count'>('amount');
-
-  // Debug State
-  const [debugUrls, setDebugUrls] = useState<string[]>([]);
-
-  useEffect(() => {
-    return onDebugUrl((url) => {
-        setDebugUrls(prev => [url, ...prev].slice(0, 50));
-    });
-  }, []);
 
   const handleGeocode = async () => {
     if (!address) { setError("주소를 입력해주세요."); return; }
@@ -379,30 +370,6 @@ const App: React.FC = () => {
 
   return (
     <div className="min-h-screen max-w-6xl mx-auto p-3 md:p-8 flex flex-col">
-       <div className="bg-gray-800 text-green-300 p-3 text-xs font-mono overflow-x-auto border-b-4 border-green-500 mb-6 rounded-lg shadow-xl">
-            <div className="flex justify-between mb-2 border-b border-gray-600 pb-1">
-               <span className="font-bold text-white flex items-center gap-2">
-                   <span className={`w-2 h-2 rounded-full ${debugUrls.length > 0 ? 'bg-green-500 animate-pulse' : 'bg-gray-500'}`}></span>
-                   API REQUEST URL LOG ({debugUrls.length})
-               </span>
-               <button onClick={()=>setDebugUrls([])} className="bg-gray-700 px-3 py-0.5 rounded text-white hover:bg-gray-600 transition-colors">Clear</button>
-            </div>
-            <div className="max-h-40 overflow-y-auto space-y-1 custom-scrollbar">
-                {debugUrls.length === 0 ? (
-                    <div className="text-gray-500 italic p-2 flex items-center gap-2">
-                        <Icons.Search className="w-3 h-3"/> API 요청을 기다리고 있습니다... (검색을 실행해보세요)
-                    </div>
-                ) : (
-                    debugUrls.map((url, i) => (
-                        <div key={i} className="whitespace-nowrap hover:bg-gray-700 px-2 py-1 rounded border-b border-gray-700/50 flex items-center gap-2">
-                            <span className="text-yellow-500 font-bold min-w-[24px]">[{debugUrls.length - i}]</span>
-                            <span className="break-all text-gray-300">{url}</span>
-                        </div>
-                    ))
-                )}
-            </div>
-       </div>
-
       <div className="flex-grow">
       {/* Header */}
       <header className="mb-10 flex flex-col items-center justify-center gap-4 text-center relative pt-4 md:pt-8">
