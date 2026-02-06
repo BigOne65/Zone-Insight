@@ -612,18 +612,14 @@ export const fetchSeoulSalesData = async (adminCode: string): Promise<SeoulSales
     // 최근 분기 추정 (현재 날짜 기준)
     const now = new Date();
     const currentYear = now.getFullYear();
-    const month = now.getMonth() + 1;
-    let targetQuarters: string[] = [];
-    
-    // 데이터 갱신 주기를 고려하여 이전 분기부터 역순으로 시도
-    if (month <= 3) {
-        targetQuarters = [`${currentYear-1}4`, `${currentYear-1}3`];
-    } else if (month <= 6) {
-        targetQuarters = [`${currentYear}1`, `${currentYear-1}4`];
-    } else if (month <= 9) {
-        targetQuarters = [`${currentYear}2`, `${currentYear}1`];
-    } else {
-        targetQuarters = [`${currentYear}3`, `${currentYear}2`];
+
+    // 20254(미래)부터 과거 2년치(8분기)를 후보군으로 설정하여 데이터가 있는 가장 최근 분기 검색
+    // 사용자가 '20254' 등 미래 날짜를 원할 경우를 대비해 올해 4분기부터 시작
+    const targetQuarters = [];
+    for(let y = currentYear; y >= currentYear - 1; y--) {
+        for(let q = 4; q >= 1; q--) {
+            targetQuarters.push(`${y}${q}`);
+        }
     }
 
     const serviceName = "VwsmAdstrdSelngW";
@@ -667,82 +663,110 @@ export const fetchSeoulSalesData = async (adminCode: string): Promise<SeoulSales
                         genderAmount: { male: 0, female: 0 },
                         genderCount: { male: 0, female: 0 },
                         ageAmount: { "10": 0, "20": 0, "30": 0, "40": 0, "50": 0, "60": 0 },
-                        ageCount: { "10": 0, "20": 0, "30": 0, "40": 0, "50": 0, "60": 0 },
+                        ageCount: { "10": 0, "20": 0, "30": 0, "40": 0, "50": 0, "60": 0 }
                     };
 
-                    // Sum up all rows (Service Industries)
-                    rows.forEach((r: any) => {
-                        aggregatedData!.totalAmount += r.THSMON_SELNG_AMT || 0;
-                        aggregatedData!.totalCount += r.THSMON_SELNG_CO || 0;
+                    rows.forEach((row: any) => {
+                        // Amount & Count
+                        aggregatedData!.totalAmount += row.TH_MON_SELNG_AMT + row.TH_TUE_SELNG_AMT + row.TH_WED_SELNG_AMT + row.TH_THU_SELNG_AMT + row.TH_FRI_SELNG_AMT + row.TH_SAT_SELNG_AMT + row.TH_SUN_SELNG_AMT;
+                        aggregatedData!.totalCount += row.TH_MON_SELNG_CO + row.TH_TUE_SELNG_CO + row.TH_WED_SELNG_CO + row.TH_THU_SELNG_CO + row.TH_FRI_SELNG_CO + row.TH_SAT_SELNG_CO + row.TH_SUN_SELNG_CO;
+
+                        // Weekday vs Weekend
+                        aggregatedData!.weekdayAmount += row.TH_MON_SELNG_AMT + row.TH_TUE_SELNG_AMT + row.TH_WED_SELNG_AMT + row.TH_THU_SELNG_AMT + row.TH_FRI_SELNG_AMT;
+                        aggregatedData!.weekendAmount += row.TH_SAT_SELNG_AMT + row.TH_SUN_SELNG_AMT;
                         
-                        aggregatedData!.weekdayAmount += r.MDWK_SELNG_AMT || 0;
-                        aggregatedData!.weekendAmount += r.WKEND_SELNG_AMT || 0;
-                        aggregatedData!.weekdayCount += r.MDWK_SELNG_CO || 0;
-                        aggregatedData!.weekendCount += r.WKEND_SELNG_CO || 0;
+                        aggregatedData!.weekdayCount += row.TH_MON_SELNG_CO + row.TH_TUE_SELNG_CO + row.TH_WED_SELNG_CO + row.TH_THU_SELNG_CO + row.TH_FRI_SELNG_CO;
+                        aggregatedData!.weekendCount += row.TH_SAT_SELNG_CO + row.TH_SUN_SELNG_CO;
 
-                        // Days
-                        const days = ['MON', 'TUE', 'WED', 'THUR', 'FRI', 'SAT', 'SUN'];
-                        days.forEach(d => {
-                             const key = d === 'THUR' ? 'THU' : d; // Standardize
-                             aggregatedData!.dayAmount[key] += r[`${d}_SELNG_AMT`] || 0;
-                             aggregatedData!.dayCount[key] += r[`${d}_SELNG_CO`] || 0;
-                        });
+                        // Day of Week
+                        aggregatedData!.dayAmount.MON += row.TH_MON_SELNG_AMT;
+                        aggregatedData!.dayAmount.TUE += row.TH_TUE_SELNG_AMT;
+                        aggregatedData!.dayAmount.WED += row.TH_WED_SELNG_AMT;
+                        aggregatedData!.dayAmount.THU += row.TH_THU_SELNG_AMT;
+                        aggregatedData!.dayAmount.FRI += row.TH_FRI_SELNG_AMT;
+                        aggregatedData!.dayAmount.SAT += row.TH_SAT_SELNG_AMT;
+                        aggregatedData!.dayAmount.SUN += row.TH_SUN_SELNG_AMT;
 
-                        // Times
-                        const times = ["00_06", "06_11", "11_14", "14_17", "17_21", "21_24"];
-                        times.forEach(t => {
-                            aggregatedData!.timeAmount[t] += r[`TMZON_${t}_SELNG_AMT`] || 0;
-                            aggregatedData!.timeCount[t] += r[`TMZON_${t}_SELNG_CO`] || 0;
-                        });
+                        aggregatedData!.dayCount.MON += row.TH_MON_SELNG_CO;
+                        aggregatedData!.dayCount.TUE += row.TH_TUE_SELNG_CO;
+                        aggregatedData!.dayCount.WED += row.TH_WED_SELNG_CO;
+                        aggregatedData!.dayCount.THU += row.TH_THU_SELNG_CO;
+                        aggregatedData!.dayCount.FRI += row.TH_FRI_SELNG_CO;
+                        aggregatedData!.dayCount.SAT += row.TH_SAT_SELNG_CO;
+                        aggregatedData!.dayCount.SUN += row.TH_SUN_SELNG_CO;
+
+                        // Time Slot
+                        aggregatedData!.timeAmount["00_06"] += row.TMZN_00_06_SELNG_AMT;
+                        aggregatedData!.timeAmount["06_11"] += row.TMZN_06_11_SELNG_AMT;
+                        aggregatedData!.timeAmount["11_14"] += row.TMZN_11_14_SELNG_AMT;
+                        aggregatedData!.timeAmount["14_17"] += row.TMZN_14_17_SELNG_AMT;
+                        aggregatedData!.timeAmount["17_21"] += row.TMZN_17_21_SELNG_AMT;
+                        aggregatedData!.timeAmount["21_24"] += row.TMZN_21_24_SELNG_AMT;
+
+                        aggregatedData!.timeCount["00_06"] += row.TMZN_00_06_SELNG_CO;
+                        aggregatedData!.timeCount["06_11"] += row.TMZN_06_11_SELNG_CO;
+                        aggregatedData!.timeCount["11_14"] += row.TMZN_11_14_SELNG_CO;
+                        aggregatedData!.timeCount["14_17"] += row.TMZN_14_17_SELNG_CO;
+                        aggregatedData!.timeCount["17_21"] += row.TMZN_17_21_SELNG_CO;
+                        aggregatedData!.timeCount["21_24"] += row.TMZN_21_24_SELNG_CO;
 
                         // Gender
-                        aggregatedData!.genderAmount.male += r.ML_SELNG_AMT || 0;
-                        aggregatedData!.genderAmount.female += r.FML_SELNG_AMT || 0;
-                        aggregatedData!.genderCount.male += r.ML_SELNG_CO || 0;
-                        aggregatedData!.genderCount.female += r.FML_SELNG_CO || 0;
+                        aggregatedData!.genderAmount.male += row.ML_SELNG_AMT;
+                        aggregatedData!.genderAmount.female += row.FML_SELNG_AMT;
+                        aggregatedData!.genderCount.male += row.ML_SELNG_CO;
+                        aggregatedData!.genderCount.female += row.FML_SELNG_CO;
 
                         // Age
-                        const ages = ["10", "20", "30", "40", "50", "60_ABOVE"];
-                        ages.forEach(a => {
-                             const key = a === "60_ABOVE" ? "60" : a;
-                             aggregatedData!.ageAmount[key] += r[`AGRDE_${a}_SELNG_AMT`] || 0;
-                             aggregatedData!.ageCount[key] += r[`AGRDE_${a}_SELNG_CO`] || 0;
-                        });
+                        aggregatedData!.ageAmount["10"] += row.AGRDE_10_SELNG_AMT;
+                        aggregatedData!.ageAmount["20"] += row.AGRDE_20_SELNG_AMT;
+                        aggregatedData!.ageAmount["30"] += row.AGRDE_30_SELNG_AMT;
+                        aggregatedData!.ageAmount["40"] += row.AGRDE_40_SELNG_AMT;
+                        aggregatedData!.ageAmount["50"] += row.AGRDE_50_SELNG_AMT;
+                        aggregatedData!.ageAmount["60"] += row.AGRDE_60_ABOVE_SELNG_AMT;
+
+                        aggregatedData!.ageCount["10"] += row.AGRDE_10_SELNG_CO;
+                        aggregatedData!.ageCount["20"] += row.AGRDE_20_SELNG_CO;
+                        aggregatedData!.ageCount["30"] += row.AGRDE_30_SELNG_CO;
+                        aggregatedData!.ageCount["40"] += row.AGRDE_40_SELNG_CO;
+                        aggregatedData!.ageCount["50"] += row.AGRDE_50_SELNG_CO;
+                        aggregatedData!.ageCount["60"] += row.AGRDE_60_ABOVE_SELNG_CO;
                     });
                     
-                    break; // Found data, stop loop
+                    // Break after successful fetch and aggregation
+                    break;
                 }
-            } else {
-                 // Check specific error codes if needed, e.g., INFO-200 (No Data)
-                 console.log(`Seoul API Info (${q}):`, data.RESULT?.MESSAGE || "No Data");
             }
-
         } catch (e) {
-            console.warn("Seoul Sales API Error:", e);
+            console.warn(`Seoul API Network/Retry Error (${q}):`, e);
         }
     }
 
     return aggregatedData;
 };
 
-// Helper to get Admin Code from Coordinates (Reverse Geocoding)
-// Needed when searching by "Trade Zone" (Address) to get the Admin Dong Code for Seoul API
+/**
+ * 좌표(위경도)를 행정동 코드로 변환 (Reverse Geocoding)
+ * V-World API 사용
+ */
 export const getAdminCodeFromCoords = async (lat: number, lon: number): Promise<string | null> => {
-    if (!VWORLD_KEY) return null;
+    if (!VWORLD_KEY || VWORLD_KEY.startsWith("YOUR")) return null;
     
-    // V-World Geocoding API to get structure including admin code
-    const url = `${VWORLD_BASE_URL}?service=address&request=getAddress&version=2.0&crs=EPSG:4326&point=${lon},${lat}&format=json&type=PARCEL&key=${VWORLD_KEY}`;
+    // Using V-World Reverse Geocoding via JSONP
+    const url = `https://api.vworld.kr/req/address?service=address&request=getAddress&version=2.0&crs=EPSG:4326&point=${lon},${lat}&format=json&type=PARCEL&zipcode=false&simple=false&key=${VWORLD_KEY}`;
     
     try {
-        const text = await fetchWithRetry(url);
-        const json = JSON.parse(text);
-        if (json.response?.status === "OK" && json.response.result?.[0]?.structure) {
-             const structure = json.response.result[0].structure;
-             // level4AC is usually the 10-digit admin dong code
-             return structure.level4AC || null;
+        const data = await fetchJsonp(url);
+        if (data.response && data.response.status === "OK") {
+            const result = data.response.result;
+            if (result && result.length > 0) {
+                 const structure = result[0].structure;
+                 if (structure && structure.level4AC) {
+                     return structure.level4AC;
+                 }
+            }
         }
-    } catch(e) {
-        console.warn("Failed to get admin code from coords", e);
+    } catch (e) {
+        console.warn("Reverse Geocoding failed:", e);
     }
     return null;
-}
+};
