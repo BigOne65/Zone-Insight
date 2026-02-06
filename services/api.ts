@@ -1,4 +1,4 @@
-import { Zone, Store, SbizStats } from '../types';
+import { Zone, Store, SbizStats, SeoulSalesData } from '../types';
 
 // Declare proj4 global
 declare const proj4: any;
@@ -25,12 +25,14 @@ const DATA_API_KEY = getEnvVar("VITE_DATA_API_KEY");
 const VWORLD_KEY = getEnvVar("VITE_VWORLD_KEY");
 const SGIS_ID = getEnvVar("VITE_SGIS_SERVICE_ID");
 const SGIS_SECRET = getEnvVar("VITE_SGIS_SECRET_KEY");
+const SEOUL_DATA_KEY = getEnvVar("VITE_SEOUL_DATA_KEY");
 
 // API Endpoints
 const BASE_URL = "https://apis.data.go.kr/B553077/api/open/sdsc2";
 const VWORLD_BASE_URL = "https://api.vworld.kr/req/search";
 // Update Base URL to mods.go.kr
 const SGIS_BASE_URL = "https://sgisapi.mods.go.kr/OpenAPI3";
+const SEOUL_BASE_URL = "http://openapi.seoul.go.kr:8088";
 
 // --- Cache ---
 const polygonCache = new Map<string, number[][][]>();
@@ -251,7 +253,6 @@ export const fetchStores = async (zoneNo: string, onProgress: (msg: string) => v
     
     if (totalPages > 1) {
         // Parallel fetching in batches to speed up loading
-        // 6 simultaneous requests is usually safe for browsers and this API
         const BATCH_SIZE = 6;
         let consecutiveErrors = 0;
 
@@ -289,13 +290,10 @@ export const fetchStores = async (zoneNo: string, onProgress: (msg: string) => v
                 });
             }
             
-            // Break loop if multiple batches fail completely
             if (consecutiveErrors >= 2) {
                 console.warn("연속된 API 호출 실패로 추가 데이터 수집을 중단합니다.");
                 break;
             }
-            
-            // Slight delay to prevent complete congestion
             await new Promise(r => setTimeout(r, 50));
         }
     }
@@ -598,3 +596,153 @@ export const fetchSbizData = async (dongCd: string): Promise<SbizStats> => {
         return { population: null, maxSales: null, delivery: null, ageRank: null };
     }
 };
+
+/**
+ * 서울 열린데이터 광장 (행정동별 추정매출) 데이터 조회
+ */
+export const fetchSeoulSalesData = async (adminCode: string): Promise<SeoulSalesData | null> => {
+    if (!SEOUL_DATA_KEY || SEOUL_DATA_KEY.startsWith("YOUR")) {
+        console.warn("서울 데이터 API 키가 없습니다.");
+        return null;
+    }
+
+    // 서울시 코드는 10자리 행정동 코드(11xxxxxxx)를 사용하지만, API 호출 시 확인 필요.
+    // VwsmAdstrdSelngW 서비스 호출
+    
+    // 최근 분기 추정 (현재 날짜 기준)
+    const now = new Date();
+    const currentYear = now.getFullYear();
+    const month = now.getMonth() + 1;
+    let targetQuarters: string[] = [];
+    
+    // 데이터 갱신 주기를 고려하여 이전 분기부터 역순으로 시도
+    if (month <= 3) {
+        targetQuarters = [`${currentYear-1}4`, `${currentYear-1}3`];
+    } else if (month <= 6) {
+        targetQuarters = [`${currentYear}1`, `${currentYear-1}4`];
+    } else if (month <= 9) {
+        targetQuarters = [`${currentYear}2`, `${currentYear}1`];
+    } else {
+        targetQuarters = [`${currentYear}3`, `${currentYear}2`];
+    }
+
+    const serviceName = "VwsmAdstrdSelngW";
+    
+    // Aggregate result holder
+    let aggregatedData: SeoulSalesData | null = null;
+
+    for (const q of targetQuarters) {
+        // Format: KEY/json/Service/Start/End/YearQuarter/AdminCode
+        const url = `${SEOUL_BASE_URL}/${SEOUL_DATA_KEY}/json/${serviceName}/1/1000/${q}/${adminCode}`;
+        
+        try {
+            const jsonText = await fetchWithRetry(url);
+            
+            // Error handling for Seoul API
+            // Usually returns JSON like { VwsmAdstrdSelngW: { row: [...] } } or { RESULT: { CODE: ... } }
+            // Some error responses are valid JSON, some might be HTML/XML if key is wrong
+            
+            let data: any;
+            try {
+                data = JSON.parse(jsonText);
+            } catch (e) {
+                console.warn(`Seoul API Parse Error (${q}):`, jsonText);
+                continue; 
+            }
+
+            if (data.VwsmAdstrdSelngW && data.VwsmAdstrdSelngW.row) {
+                const rows = data.VwsmAdstrdSelngW.row;
+                if (rows.length > 0) {
+                    // Initialize Aggregation
+                    aggregatedData = {
+                        stdrYearQuarter: q,
+                        totalAmount: 0,
+                        totalCount: 0,
+                        weekdayAmount: 0, weekendAmount: 0,
+                        weekdayCount: 0, weekendCount: 0,
+                        dayAmount: { MON: 0, TUE: 0, WED: 0, THU: 0, FRI: 0, SAT: 0, SUN: 0 },
+                        dayCount: { MON: 0, TUE: 0, WED: 0, THU: 0, FRI: 0, SAT: 0, SUN: 0 },
+                        timeAmount: { "00_06": 0, "06_11": 0, "11_14": 0, "14_17": 0, "17_21": 0, "21_24": 0 },
+                        timeCount: { "00_06": 0, "06_11": 0, "11_14": 0, "14_17": 0, "17_21": 0, "21_24": 0 },
+                        genderAmount: { male: 0, female: 0 },
+                        genderCount: { male: 0, female: 0 },
+                        ageAmount: { "10": 0, "20": 0, "30": 0, "40": 0, "50": 0, "60": 0 },
+                        ageCount: { "10": 0, "20": 0, "30": 0, "40": 0, "50": 0, "60": 0 },
+                    };
+
+                    // Sum up all rows (Service Industries)
+                    rows.forEach((r: any) => {
+                        aggregatedData!.totalAmount += r.THSMON_SELNG_AMT || 0;
+                        aggregatedData!.totalCount += r.THSMON_SELNG_CO || 0;
+                        
+                        aggregatedData!.weekdayAmount += r.MDWK_SELNG_AMT || 0;
+                        aggregatedData!.weekendAmount += r.WKEND_SELNG_AMT || 0;
+                        aggregatedData!.weekdayCount += r.MDWK_SELNG_CO || 0;
+                        aggregatedData!.weekendCount += r.WKEND_SELNG_CO || 0;
+
+                        // Days
+                        const days = ['MON', 'TUE', 'WED', 'THUR', 'FRI', 'SAT', 'SUN'];
+                        days.forEach(d => {
+                             const key = d === 'THUR' ? 'THU' : d; // Standardize
+                             aggregatedData!.dayAmount[key] += r[`${d}_SELNG_AMT`] || 0;
+                             aggregatedData!.dayCount[key] += r[`${d}_SELNG_CO`] || 0;
+                        });
+
+                        // Times
+                        const times = ["00_06", "06_11", "11_14", "14_17", "17_21", "21_24"];
+                        times.forEach(t => {
+                            aggregatedData!.timeAmount[t] += r[`TMZON_${t}_SELNG_AMT`] || 0;
+                            aggregatedData!.timeCount[t] += r[`TMZON_${t}_SELNG_CO`] || 0;
+                        });
+
+                        // Gender
+                        aggregatedData!.genderAmount.male += r.ML_SELNG_AMT || 0;
+                        aggregatedData!.genderAmount.female += r.FML_SELNG_AMT || 0;
+                        aggregatedData!.genderCount.male += r.ML_SELNG_CO || 0;
+                        aggregatedData!.genderCount.female += r.FML_SELNG_CO || 0;
+
+                        // Age
+                        const ages = ["10", "20", "30", "40", "50", "60_ABOVE"];
+                        ages.forEach(a => {
+                             const key = a === "60_ABOVE" ? "60" : a;
+                             aggregatedData!.ageAmount[key] += r[`AGRDE_${a}_SELNG_AMT`] || 0;
+                             aggregatedData!.ageCount[key] += r[`AGRDE_${a}_SELNG_CO`] || 0;
+                        });
+                    });
+                    
+                    break; // Found data, stop loop
+                }
+            } else {
+                 // Check specific error codes if needed, e.g., INFO-200 (No Data)
+                 console.log(`Seoul API Info (${q}):`, data.RESULT?.MESSAGE || "No Data");
+            }
+
+        } catch (e) {
+            console.warn("Seoul Sales API Error:", e);
+        }
+    }
+
+    return aggregatedData;
+};
+
+// Helper to get Admin Code from Coordinates (Reverse Geocoding)
+// Needed when searching by "Trade Zone" (Address) to get the Admin Dong Code for Seoul API
+export const getAdminCodeFromCoords = async (lat: number, lon: number): Promise<string | null> => {
+    if (!VWORLD_KEY) return null;
+    
+    // V-World Geocoding API to get structure including admin code
+    const url = `${VWORLD_BASE_URL}?service=address&request=getAddress&version=2.0&crs=EPSG:4326&point=${lon},${lat}&format=json&type=PARCEL&key=${VWORLD_KEY}`;
+    
+    try {
+        const text = await fetchWithRetry(url);
+        const json = JSON.parse(text);
+        if (json.response?.status === "OK" && json.response.result?.[0]?.structure) {
+             const structure = json.response.result[0].structure;
+             // level4AC is usually the 10-digit admin dong code
+             return structure.level4AC || null;
+        }
+    } catch(e) {
+        console.warn("Failed to get admin code from coords", e);
+    }
+    return null;
+}

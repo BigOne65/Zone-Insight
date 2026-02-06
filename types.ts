@@ -1,3 +1,4 @@
+
 export interface Coords {
   lat: number;
   lon: number;
@@ -85,4 +86,33 @@ export interface SbizStats {
     date: string;
   } | null;
   ageRank: Array<{ age: string; count: number }> | null;
+}
+
+// Seoul Estimated Sales Data Types
+export interface SeoulSalesData {
+  stdrYearQuarter: string; // 기준 년분기 (예: 20231)
+  totalAmount: number;     // 당월 매출 금액
+  totalCount: number;      // 당월 매출 건수
+  
+  // Weekday vs Weekend
+  weekdayAmount: number;
+  weekendAmount: number;
+  weekdayCount: number;
+  weekendCount: number;
+
+  // Day of Week
+  dayAmount: { [key: string]: number }; // MON, TUE...
+  dayCount: { [key: string]: number };
+
+  // Time Slot
+  timeAmount: { [key: string]: number }; // 00_06, 06_11...
+  timeCount: { [key: string]: number };
+
+  // Gender
+  genderAmount: { male: number; female: number };
+  genderCount: { male: number; female: number };
+
+  // Age
+  ageAmount: { [key: string]: number }; // 10, 20...
+  ageCount: { [key: string]: number };
 }
