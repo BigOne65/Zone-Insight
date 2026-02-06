@@ -3,7 +3,7 @@ import { PieChart, Pie, Cell, BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveCo
 import * as Icons from './components/Icons';
 import TradeMap from './components/Map';
 import GoogleAd from './components/GoogleAd';
-import { searchAddress, searchZones, fetchStores, searchAdminDistrict, fetchStoresInAdmin, fetchLocalAdminPolygon, fetchSbizData, fetchSeoulSalesData, getAdminCodeFromCoords } from './services/api';
+import { searchAddress, searchZones, fetchStores, searchAdminDistrict, fetchStoresInAdmin, fetchLocalAdminPolygon, fetchSbizData, fetchSeoulSalesData, getAdminCodeFromCoords, onDebugUrl } from './services/api';
 import { Zone, Store, StoreStats, SbizStats, SeoulSalesData } from './types';
 
 // Constants
@@ -96,6 +96,15 @@ const App: React.FC = () => {
 
   // Sales Tab State
   const [salesViewMode, setSalesViewMode] = useState<'amount' | 'count'>('amount');
+
+  // Debug State
+  const [debugUrls, setDebugUrls] = useState<string[]>([]);
+
+  useEffect(() => {
+    return onDebugUrl((url) => {
+        setDebugUrls(prev => [url, ...prev].slice(0, 20));
+    });
+  }, []);
 
   const handleGeocode = async () => {
     if (!address) { setError("주소를 입력해주세요."); return; }
@@ -370,6 +379,26 @@ const App: React.FC = () => {
 
   return (
     <div className="min-h-screen max-w-6xl mx-auto p-3 md:p-8 flex flex-col">
+      {debugUrls.length > 0 && (
+         <div className="bg-gray-800 text-green-300 p-3 text-xs font-mono overflow-x-auto border-b-2 border-green-500 mb-6 rounded-lg shadow-lg">
+            <div className="flex justify-between mb-2 border-b border-gray-600 pb-1">
+               <span className="font-bold text-white flex items-center gap-2">
+                   <span className="w-2 h-2 rounded-full bg-green-500 animate-pulse"></span>
+                   API REQUEST URL LOG
+               </span>
+               <button onClick={()=>setDebugUrls([])} className="bg-gray-700 px-3 py-0.5 rounded text-white hover:bg-gray-600 transition-colors">Clear</button>
+            </div>
+            <div className="max-h-40 overflow-y-auto space-y-1 custom-scrollbar">
+                {debugUrls.map((url, i) => (
+                    <div key={i} className="whitespace-nowrap hover:bg-gray-700 px-1 rounded">
+                        <span className="text-gray-500 mr-2">[{i+1}]</span>
+                        {url}
+                    </div>
+                ))}
+            </div>
+         </div>
+      )}
+
       <div className="flex-grow">
       {/* Header */}
       <header className="mb-10 flex flex-col items-center justify-center gap-4 text-center relative pt-4 md:pt-8">

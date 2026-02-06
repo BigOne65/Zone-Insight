@@ -8,6 +8,25 @@ const PROJ_WGS84 = 'EPSG:4326';
 // SGIS uses UTM-K (GRS80)
 const PROJ_5179 = "+proj=tmerc +lat_0=38 +lon_0=127.5 +k=0.9996 +x_0=1000000 +y_0=2000000 +ellps=GRS80 +towgs84=0,0,0,0,0,0,0 +units=m +no_defs";
 
+// --- Debug System ---
+type DebugCallback = (url: string) => void;
+const debugListeners: DebugCallback[] = [];
+
+/**
+ * API 요청 URL을 구독하는 리스너 등록 함수
+ */
+export const onDebugUrl = (callback: DebugCallback) => {
+    debugListeners.push(callback);
+    return () => {
+        const idx = debugListeners.indexOf(callback);
+        if (idx !== -1) debugListeners.splice(idx, 1);
+    };
+};
+
+const notifyDebug = (url: string) => {
+    debugListeners.forEach(cb => cb(url));
+};
+
 /**
  * 환경 변수 로드 헬퍼
  */
@@ -66,6 +85,7 @@ const parseXmlError = (text: string) => {
 // --- Network Helpers ---
 
 const fetchJsonp = (url: string, callbackParam = 'callback'): Promise<any> => {
+    notifyDebug(url);
     return new Promise((resolve, reject) => {
         const script = document.createElement('script');
         const callbackName = `jsonp_callback_${Math.round(100000 * Math.random())}`;
@@ -92,6 +112,7 @@ const fetchJsonp = (url: string, callbackParam = 'callback'): Promise<any> => {
  * No longer requires external proxies. Vercel/Vite handles CORS.
  */
 const fetchStandard = async (url: string): Promise<string> => {
+    notifyDebug(url);
     try {
         const response = await fetch(url);
         if (!response.ok) {
