@@ -589,6 +589,7 @@ export const fetchSeoulSalesData = async (adminCode: string): Promise<SeoulSales
     const targetQuarters = [];
     for(let y = currentYear; y >= currentYear - 1; y--) {
         for(let q = 4; q >= 1; q--) {
+            // YYYYQ 형식으로 저장 (예: 20231)
             targetQuarters.push(`${y}${q}`);
         }
     }
@@ -732,11 +733,10 @@ export const fetchSeoulSalesData = async (adminCode: string): Promise<SeoulSales
 
     for (const q of targetQuarters) {
         // q는 YYYYQ 형태 (예: 20231)
-        const year = q.substring(0, 4);
-        const quarter = q.substring(4);
         
-        // 올바른 API URL: YEAR / QUARTER / ADMIN_CODE
-        const url = `${SEOUL_BASE_URL}/${SEOUL_DATA_KEY}/json/${serviceName}/1/1000/${year}/${quarter}/${adminCode}`;
+        // 올바른 API URL: KEY/TYPE/SERVICE/START/END/YYYYQ
+        // adminCode 파라미터는 API 명세에 없으므로 URL에서 제거하고 결과값에서 필터링합니다.
+        const url = `${SEOUL_BASE_URL}/${SEOUL_DATA_KEY}/json/${serviceName}/1/1000/${q}`;
         
         try {
             const jsonText = await fetchStandard(url);
