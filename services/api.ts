@@ -228,7 +228,7 @@ export const fetchStores = async (zoneNo: string, onProgress: (msg: string) => v
     const totalPages = Math.ceil(totalCount / PAGE_SIZE);
     
     if (totalPages > 1) {
-        const BATCH_SIZE = 6;
+        const BATCH_SIZE = 3;
         let consecutiveErrors = 0;
 
         for (let i = 2; i <= totalPages; i += BATCH_SIZE) {
@@ -438,7 +438,7 @@ export const fetchStoresInAdmin = async (adminCode: string, divId: string, onPro
     const totalPages = Math.ceil(totalCount / PAGE_SIZE);
     
     if (totalPages > 1) {
-        const BATCH_SIZE = 6;
+        const BATCH_SIZE = 3;
         let consecutiveErrors = 0;
 
         for (let i = 2; i <= totalPages; i += BATCH_SIZE) {
