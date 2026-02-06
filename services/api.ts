@@ -572,8 +572,7 @@ export const fetchSeoulSalesData = async (adminCode: string): Promise<SeoulSales
         }
     }
 
-    // 서비스명 변경: 'VwsmAdstrdSelngW' -> 'VwsmAdstrdSelngQq' (표준 분기 데이터)
-    const serviceName = "VwsmAdstrdSelngQq";
+    const serviceName = "VwsmAdstrdSelngW";
     let aggregatedData: SeoulSalesData | null = null;
     const industryMap: Record<string, SeoulSalesData> = {};
 
