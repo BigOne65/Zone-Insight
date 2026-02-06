@@ -91,7 +91,8 @@ const fetchJsonp = (url: string, callbackParam = 'callback'): Promise<any> => {
     });
 };
 
-// Proxy list - remove corsproxy.io as it often returns 403 for data.go.kr
+// Proxy list optimized for speed and reliability
+// api.allorigins.win uses Cloudflare (Anycast), so it usually finds the fastest route (e.g. ICN node).
 const PROXY_LIST = [
     (url: string) => `https://api.allorigins.win/raw?url=${encodeURIComponent(url)}`,
     (url: string) => `https://api.codetabs.com/v1/proxy?quest=${encodeURIComponent(url)}`,
@@ -249,33 +250,53 @@ export const fetchStores = async (zoneNo: string, onProgress: (msg: string) => v
     const totalPages = Math.ceil(totalCount / PAGE_SIZE);
     
     if (totalPages > 1) {
+        // Parallel fetching in batches to speed up loading
+        // 6 simultaneous requests is usually safe for browsers and this API
+        const BATCH_SIZE = 6;
         let consecutiveErrors = 0;
-        for (let i = 2; i <= totalPages; i++) {
-            const nextUrl = `${BASE_URL}/storeListInArea?key=${zoneNo}&numOfRows=${PAGE_SIZE}&pageNo=${i}&serviceKey=${serviceKey}&type=json`;
-            try {
-                const nextText = await fetchWithRetry(nextUrl);
-                if (!nextText.trim().startsWith('<')) {
-                    const nextJson = JSON.parse(nextText);
-                    if (nextJson.body?.items) {
-                        const nextItems = Array.isArray(nextJson.body.items) ? nextJson.body.items : [nextJson.body.items];
-                        allStores = [...allStores, ...nextItems];
-                        consecutiveErrors = 0; // Reset error count on success
-                    }
-                } else {
-                    consecutiveErrors++;
-                }
-            } catch (e) {
+
+        for (let i = 2; i <= totalPages; i += BATCH_SIZE) {
+            const endPage = Math.min(i + BATCH_SIZE - 1, totalPages);
+            onProgress(`${i}~${endPage} / ${totalPages} 페이지 데이터 고속 수집 중... (병렬 연결)`);
+
+            const promises = [];
+            for (let page = i; page <= endPage; page++) {
+                const nextUrl = `${BASE_URL}/storeListInArea?key=${zoneNo}&numOfRows=${PAGE_SIZE}&pageNo=${page}&serviceKey=${serviceKey}&type=json`;
+                promises.push(
+                    fetchWithRetry(nextUrl)
+                        .then(text => {
+                            if (text.trim().startsWith('<')) return null;
+                            const json = JSON.parse(text);
+                            return json.body?.items || json.response?.body?.items;
+                        })
+                        .then(items => {
+                            if (items) return Array.isArray(items) ? items : [items];
+                            return null;
+                        })
+                        .catch(() => null)
+                );
+            }
+
+            const results = await Promise.all(promises);
+            const validResults = results.filter(r => r !== null);
+
+            if (validResults.length === 0) {
                 consecutiveErrors++;
+            } else {
+                consecutiveErrors = 0;
+                validResults.forEach(items => {
+                    allStores = [...allStores, ...items];
+                });
             }
             
-            // If 3 consecutive pages fail, stop trying to save time
-            if (consecutiveErrors >= 3) {
+            // Break loop if multiple batches fail completely
+            if (consecutiveErrors >= 2) {
                 console.warn("연속된 API 호출 실패로 추가 데이터 수집을 중단합니다.");
                 break;
             }
-
-            onProgress(`${i} / ${totalPages} 페이지 수집 중...`);
-            await new Promise(r => setTimeout(r, 100));
+            
+            // Slight delay to prevent complete congestion
+            await new Promise(r => setTimeout(r, 50));
         }
     }
     return { stores: allStores, stdrYm };
@@ -454,33 +475,49 @@ export const fetchStoresInAdmin = async (adminCode: string, divId: string, onPro
     const totalPages = Math.ceil(totalCount / PAGE_SIZE);
     
     if (totalPages > 1) {
+        // Parallel fetching for speed
+        const BATCH_SIZE = 6;
         let consecutiveErrors = 0;
-        for (let i = 2; i <= totalPages; i++) {
-            const nextUrl = `${BASE_URL}/storeListInDong?divId=${divId}&key=${adminCode}&numOfRows=${PAGE_SIZE}&pageNo=${i}&serviceKey=${serviceKey}&type=json`;
-            try {
-                const nextText = await fetchWithRetry(nextUrl);
-                if (!nextText.trim().startsWith('<')) {
-                    const nextJson = JSON.parse(nextText);
-                    if (nextJson.body?.items) {
-                        const nextItems = Array.isArray(nextJson.body.items) ? nextJson.body.items : [nextJson.body.items];
-                        allStores = [...allStores, ...nextItems];
-                        consecutiveErrors = 0;
-                    }
-                } else {
-                    consecutiveErrors++;
-                }
-            } catch (e) {
+
+        for (let i = 2; i <= totalPages; i += BATCH_SIZE) {
+            const endPage = Math.min(i + BATCH_SIZE - 1, totalPages);
+            onProgress(`${i}~${endPage} / ${totalPages} 페이지 데이터 고속 수집 중... (병렬 연결)`);
+
+            const promises = [];
+            for (let page = i; page <= endPage; page++) {
+                const nextUrl = `${BASE_URL}/storeListInDong?divId=${divId}&key=${adminCode}&numOfRows=${PAGE_SIZE}&pageNo=${page}&serviceKey=${serviceKey}&type=json`;
+                promises.push(
+                    fetchWithRetry(nextUrl)
+                        .then(text => {
+                             if (text.trim().startsWith('<')) return null;
+                             const json = JSON.parse(text);
+                             return json.body?.items || json.response?.body?.items;
+                        })
+                        .then(items => {
+                             if(items) return Array.isArray(items) ? items : [items];
+                             return null;
+                        })
+                        .catch(() => null)
+                );
+            }
+
+            const results = await Promise.all(promises);
+            const validResults = results.filter(r => r !== null);
+
+            if (validResults.length === 0) {
                 consecutiveErrors++;
+            } else {
+                consecutiveErrors = 0;
+                validResults.forEach(items => {
+                    allStores = [...allStores, ...items];
+                });
             }
             
-            // Break loop if multiple pages fail
-            if (consecutiveErrors >= 3) {
+            if (consecutiveErrors >= 2) {
                 console.warn("연속된 API 호출 실패로 추가 데이터 수집을 중단합니다.");
                 break;
             }
-
-            onProgress(`${i} / ${totalPages} 페이지 수집 중... (행정구역 데이터)`);
-            await new Promise(r => setTimeout(r, 200));
+            await new Promise(r => setTimeout(r, 50));
         }
     }
     return { stores: allStores, stdrYm };
