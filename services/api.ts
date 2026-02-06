@@ -91,25 +91,37 @@ const fetchJsonp = (url: string, callbackParam = 'callback'): Promise<any> => {
     });
 };
 
+// Proxy list - remove corsproxy.io as it often returns 403 for data.go.kr
+const PROXY_LIST = [
+    (url: string) => `https://api.allorigins.win/raw?url=${encodeURIComponent(url)}`,
+    (url: string) => `https://api.codetabs.com/v1/proxy?quest=${encodeURIComponent(url)}`,
+];
+
+// Track the index of the currently working proxy to avoid retrying failed ones repeatedly
+let currentProxyIndex = 0;
+
 const fetchWithRetry = async (targetUrl: string): Promise<string> => {
-    const proxies = [
-        (url: string) => `https://corsproxy.io/?${encodeURIComponent(url)}`,
-        (url: string) => `https://api.allorigins.win/raw?url=${encodeURIComponent(url)}`
-    ];
-    
     let lastError;
-    for (let i = 0; i < proxies.length; i++) {
+    
+    // Try up to the number of available proxies
+    for (let i = 0; i < PROXY_LIST.length; i++) {
+        // Calculate index starting from the current preferred proxy
+        const idx = (currentProxyIndex + i) % PROXY_LIST.length;
+        
         try {
-            const response = await fetch(proxies[i](targetUrl));
+            const response = await fetch(PROXY_LIST[idx](targetUrl));
             if (!response.ok) throw new Error(`HTTP status ${response.status}`);
-            return await response.text(); 
+            
+            // If successful, update the preferred proxy index to this one
+            currentProxyIndex = idx;
+            return await response.text();
         } catch (e) {
-            console.warn(`Proxy ${i+1} failed:`, e);
+            console.warn(`Proxy ${idx + 1} failed:`, e);
             lastError = e;
-            if (i === proxies.length - 1) throw lastError; 
+            // Continue to next proxy
         }
     }
-    throw new Error("모든 프록시 서버 연결 실패");
+    throw new Error(`모든 프록시 서버 연결 실패: ${lastError}`);
 };
 
 // --- SGIS Helpers ---
@@ -236,8 +248,8 @@ export const fetchStores = async (zoneNo: string, onProgress: (msg: string) => v
 
     const totalPages = Math.ceil(totalCount / PAGE_SIZE);
     
-    // 기존 루프 제한 해제 (loopLimit 삭제)
     if (totalPages > 1) {
+        let consecutiveErrors = 0;
         for (let i = 2; i <= totalPages; i++) {
             const nextUrl = `${BASE_URL}/storeListInArea?key=${zoneNo}&numOfRows=${PAGE_SIZE}&pageNo=${i}&serviceKey=${serviceKey}&type=json`;
             try {
@@ -247,9 +259,21 @@ export const fetchStores = async (zoneNo: string, onProgress: (msg: string) => v
                     if (nextJson.body?.items) {
                         const nextItems = Array.isArray(nextJson.body.items) ? nextJson.body.items : [nextJson.body.items];
                         allStores = [...allStores, ...nextItems];
+                        consecutiveErrors = 0; // Reset error count on success
                     }
+                } else {
+                    consecutiveErrors++;
                 }
-            } catch (e) {}
+            } catch (e) {
+                consecutiveErrors++;
+            }
+            
+            // If 3 consecutive pages fail, stop trying to save time
+            if (consecutiveErrors >= 3) {
+                console.warn("연속된 API 호출 실패로 추가 데이터 수집을 중단합니다.");
+                break;
+            }
+
             onProgress(`${i} / ${totalPages} 페이지 수집 중...`);
             await new Promise(r => setTimeout(r, 100));
         }
@@ -429,8 +453,8 @@ export const fetchStoresInAdmin = async (adminCode: string, divId: string, onPro
 
     const totalPages = Math.ceil(totalCount / PAGE_SIZE);
     
-    // 기존 루프 제한 해제 (loopLimit 삭제)
     if (totalPages > 1) {
+        let consecutiveErrors = 0;
         for (let i = 2; i <= totalPages; i++) {
             const nextUrl = `${BASE_URL}/storeListInDong?divId=${divId}&key=${adminCode}&numOfRows=${PAGE_SIZE}&pageNo=${i}&serviceKey=${serviceKey}&type=json`;
             try {
@@ -440,9 +464,21 @@ export const fetchStoresInAdmin = async (adminCode: string, divId: string, onPro
                     if (nextJson.body?.items) {
                         const nextItems = Array.isArray(nextJson.body.items) ? nextJson.body.items : [nextJson.body.items];
                         allStores = [...allStores, ...nextItems];
+                        consecutiveErrors = 0;
                     }
+                } else {
+                    consecutiveErrors++;
                 }
-            } catch (e) {}
+            } catch (e) {
+                consecutiveErrors++;
+            }
+            
+            // Break loop if multiple pages fail
+            if (consecutiveErrors >= 3) {
+                console.warn("연속된 API 호출 실패로 추가 데이터 수집을 중단합니다.");
+                break;
+            }
+
             onProgress(`${i} / ${totalPages} 페이지 수집 중... (행정구역 데이터)`);
             await new Promise(r => setTimeout(r, 200));
         }
