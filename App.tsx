@@ -98,8 +98,8 @@ const App: React.FC = () => {
   const [error, setError] = useState<string | null>(null);
   const [step, setStep] = useState<"input" | "verify_location" | "select_zone" | "result">("input");
   
-  // Search Settings
-  const [searchType, setSearchType] = useState<'trade' | 'admin'>('trade'); 
+  // Search Settings: Default is now 'admin'
+  const [searchType, setSearchType] = useState<'trade' | 'admin'>('admin'); 
 
   const [searchCoords, setSearchCoords] = useState<{lat: number, lon: number}>({ lat: 37.5665, lon: 126.9780 });
   const [resolvedAddress, setResolvedAddress] = useState("");
@@ -449,13 +449,13 @@ const App: React.FC = () => {
                <div className="bg-gray-100 p-1 rounded-xl inline-flex shadow-inner">
                    <button 
                        onClick={() => setSearchType('admin')}
-                       className={`px-4 py-2 rounded-lg text-sm font-bold transition-all duration-200 ${searchType === 'admin' ? 'bg-white text-green-600 shadow-sm' : 'text-gray-500 hover:text-gray-700'}`}
+                       className={`px-4 py-2 rounded-lg text-sm font-bold transition-all duration-200 ${searchType === 'admin' ? 'bg-white text-blue-600 shadow-sm' : 'text-gray-500 hover:text-gray-700'}`}
                    >
                        행정 구역 기준
                    </button>
                    <button 
                        onClick={() => setSearchType('trade')}
-                       className={`px-4 py-2 rounded-lg text-sm font-bold transition-all duration-200 ${searchType === 'trade' ? 'bg-white text-blue-600 shadow-sm' : 'text-gray-500 hover:text-gray-700'}`}
+                       className={`px-4 py-2 rounded-lg text-sm font-bold transition-all duration-200 ${searchType === 'trade' ? 'bg-white text-green-600 shadow-sm' : 'text-gray-500 hover:text-gray-700'}`}
                    >
                        주요 상권 기준
                    </button>
@@ -467,7 +467,7 @@ const App: React.FC = () => {
            <div className="flex flex-col gap-2 mb-4">
               <div className="flex flex-col md:flex-row gap-2">
                   <input value={address} onChange={e => setAddress(e.target.value)} onKeyDown={e => e.key === 'Enter' && handleGeocode()} className="w-full md:flex-1 p-3 md:p-4 border border-gray-300 rounded-xl text-base md:text-lg outline-none focus:ring-2 focus:ring-blue-500" placeholder="예: 테헤란로 000" />
-                  <button onClick={handleGeocode} disabled={loading} className={`w-full md:w-auto text-white py-3 md:py-0 px-8 rounded-xl font-bold hover:opacity-90 disabled:bg-gray-400 transition flex items-center justify-center gap-2 ${searchType === 'trade' ? 'bg-blue-600' : 'bg-green-600'}`}>
+                  <button onClick={handleGeocode} disabled={loading} className={`w-full md:w-auto text-white py-3 md:py-0 px-8 rounded-xl font-bold hover:opacity-90 disabled:bg-gray-400 transition flex items-center justify-center gap-2 ${searchType === 'trade' ? 'bg-green-600' : 'bg-blue-600'}`}>
                      {loading ? <div className="loading-spinner" /> : <><Icons.Search className="w-5 h-5 md:w-6 md:h-6"/><span>검색</span></>}
                   </button>
               </div>
@@ -557,7 +557,7 @@ const App: React.FC = () => {
               <TradeMap lat={searchCoords.lat} lon={searchCoords.lon} draggable={true} onDragEnd={(lat, lon) => setSearchCoords({lat, lon})} />
            </div>
            <div className="text-sm text-gray-500 mb-4 bg-gray-50 p-3 rounded">검색 결과: <strong>{resolvedAddress}</strong></div>
-           <button onClick={handleSearchZones} disabled={loading} className={`w-full text-white px-4 py-3 md:px-6 md:py-4 rounded-lg font-bold hover:opacity-90 transition flex items-center justify-center gap-2 shadow-lg ${searchType === 'trade' ? 'bg-blue-600' : 'bg-green-600'}`}>
+           <button onClick={handleSearchZones} disabled={loading} className={`w-full text-white px-4 py-3 md:px-6 md:py-4 rounded-lg font-bold hover:opacity-90 transition flex items-center justify-center gap-2 shadow-lg ${searchType === 'trade' ? 'bg-green-600' : 'bg-blue-600'}`}>
                 {loading ? '정보 조회 중...' : (searchType === 'trade' ? '📍 이 위치 주변 상권 분석하기' : '🏢 이 위치의 행정구역 분석하기')}
            </button>
            {error && <p className="text-red-500 text-sm mt-2 text-center">{error}</p>}
@@ -573,11 +573,11 @@ const App: React.FC = () => {
             </h3>
             <div className="grid grid-cols-1 gap-4">
                 {foundZones.map((z, i) => (
-                    <div key={i} className={`border rounded-xl p-4 transition-all duration-300 ${previewZone?.trarNo === z.trarNo ? 'border-blue-500 bg-blue-50 shadow-md' : 'hover:border-blue-300 bg-white hover:shadow-sm'}`}>
+                    <div key={i} className={`border rounded-xl p-4 transition-all duration-300 ${previewZone?.trarNo === z.trarNo ? (searchType === 'trade' ? 'border-green-500 bg-green-50 shadow-md' : 'border-blue-500 bg-blue-50 shadow-md') : (searchType === 'trade' ? 'hover:border-green-300 bg-white hover:shadow-sm' : 'hover:border-blue-300 bg-white hover:shadow-sm')}`}>
                         <div onClick={() => setPreviewZone(prev => prev?.trarNo === z.trarNo ? null : z)} className="cursor-pointer flex justify-between items-center">
                             <div>
                                 <div className="flex items-center gap-2 mb-1">
-                                    <span className={`text-xs px-2 py-1 rounded font-medium ${searchType === 'trade' ? 'bg-blue-100 text-blue-700' : 'bg-green-100 text-green-700'}`}>
+                                    <span className={`text-xs px-2 py-1 rounded font-medium ${searchType === 'trade' ? 'bg-green-100 text-green-700' : 'bg-blue-100 text-blue-700'}`}>
                                         {searchType === 'trade' ? `상권번호 ${z.trarNo}` : '행정동'}
                                     </span>
                                     <h4 className="font-bold text-gray-800 text-lg">{z.mainTrarNm}</h4>
@@ -597,7 +597,7 @@ const App: React.FC = () => {
                                          * 해당 행정구역의 상세 경계 데이터를 불러오지 못했습니다. (데이터 없음)
                                      </div>
                                  )}
-                                 <button onClick={(e) => { e.stopPropagation(); handleAnalyzeZone(z); }} className={`w-full text-white px-6 py-3 rounded-lg font-bold hover:opacity-90 transition flex items-center justify-center gap-2 ${searchType === 'trade' ? 'bg-blue-600' : 'bg-green-600'}`}>
+                                 <button onClick={(e) => { e.stopPropagation(); handleAnalyzeZone(z); }} className={`w-full text-white px-6 py-3 rounded-lg font-bold hover:opacity-90 transition flex items-center justify-center gap-2 ${searchType === 'trade' ? 'bg-green-600' : 'bg-blue-600'}`}>
                                     이 {searchType === 'trade' ? '상권' : '구역'} 분석 시작 <Icons.ArrowRight className="w-4 h-4"/>
                                  </button>
                             </div>
@@ -620,7 +620,7 @@ const App: React.FC = () => {
              <div className="space-y-6 animate-fade-in">
                  {/* Main Card */}
                  <div className="bg-white rounded-xl shadow-lg overflow-hidden">
-                    <div className={`bg-gradient-to-r p-4 md:p-6 text-white flex flex-col md:flex-row justify-between items-center ${tradeZone.type === 'admin' ? 'from-green-500 to-teal-600' : 'from-blue-500 to-indigo-600'}`}>
+                    <div className={`bg-gradient-to-r p-4 md:p-6 text-white flex flex-col md:flex-row justify-between items-center ${tradeZone.type === 'admin' ? 'from-blue-500 to-indigo-600' : 'from-green-500 to-teal-600'}`}>
                        <div>
                           <h2 className="text-3xl font-bold mb-1">{tradeZone.mainTrarNm}</h2>
                           <p className="opacity-90 text-sm flex items-center gap-1"><Icons.MapPin className="w-4 h-4"/> {tradeZone.ctprvnNm} {tradeZone.signguNm}</p>
@@ -724,7 +724,7 @@ const App: React.FC = () => {
                                                 <Tooltip 
                                                     formatter={(value: number) => 
                                                         salesViewMode === 'amount' 
-                                                            ? `${(value).toLocaleString()}원` 
+                                                            ? `${(value / 100000000).toFixed(2)}억원` 
                                                             : `${value.toLocaleString()}건`
                                                     } 
                                                 />
@@ -772,7 +772,8 @@ const App: React.FC = () => {
                                             // Simple bar height calc
                                             const maxVal = Math.max(...Object.values(salesViewMode === 'amount' ? currentSeoulData.dayAmount : currentSeoulData.dayCount)) || 1;
                                             const percent = (val / maxVal) * 100;
-                                            const unit = salesViewMode === 'amount' ? '원' : '건';
+                                            const unit = salesViewMode === 'amount' ? '억원' : '건';
+                                            const displayVal = salesViewMode === 'amount' ? (val / 100000000).toFixed(1) : val.toLocaleString();
 
                                             return (
                                                 <div key={d} className="flex flex-col items-center gap-1 h-full justify-end">
@@ -781,7 +782,7 @@ const App: React.FC = () => {
                                                     </div>
                                                     <span className="text-xs font-bold text-gray-600">{mapDay[d]}</span>
                                                     <span className="text-[10px] text-gray-400 scale-90 tracking-tighter">
-                                                        {val.toLocaleString()}{unit}
+                                                        {displayVal}{unit}
                                                     </span>
                                                 </div>
                                             )
@@ -798,7 +799,7 @@ const App: React.FC = () => {
                             </p>
                             <p className="text-3xl font-black text-indigo-600">
                                 {salesViewMode === 'amount' 
-                                    ? <>{(currentSeoulData.totalAmount).toLocaleString()}<span className="text-lg text-gray-500 ml-1">원</span></>
+                                    ? <>{(currentSeoulData.totalAmount / 100000000).toFixed(2)}<span className="text-lg text-gray-500 ml-1">억원</span></>
                                     : <>{(currentSeoulData.totalCount).toLocaleString()}<span className="text-lg text-gray-500 ml-1">건</span></>
                                 }
                             </p>
@@ -821,7 +822,7 @@ const App: React.FC = () => {
                                                 <Cell fill="#6366f1" /> {/* Indigo */}
                                                 <Cell fill="#f43f5e" /> {/* Rose */}
                                             </Pie>
-                                            <Tooltip formatter={(val: number) => val.toLocaleString()} />
+                                            <Tooltip formatter={(val: number) => salesViewMode === 'amount' ? `${(val/100000000).toFixed(2)}억원` : `${val.toLocaleString()}건`} />
                                         </PieChart>
                                     </ResponsiveContainer>
                                     <div className="absolute inset-0 flex items-center justify-center pointer-events-none">
@@ -838,10 +839,13 @@ const App: React.FC = () => {
                                         const wd = salesViewMode === 'amount' ? currentSeoulData.weekdayAmount : currentSeoulData.weekdayCount;
                                         const we = salesViewMode === 'amount' ? currentSeoulData.weekendAmount : currentSeoulData.weekendCount;
                                         const total = wd + we || 1;
+                                        const wdDisplay = salesViewMode === 'amount' ? (wd/100000000).toFixed(1) + '억원' : wd.toLocaleString() + '건';
+                                        const weDisplay = salesViewMode === 'amount' ? (we/100000000).toFixed(1) + '억원' : we.toLocaleString() + '건';
+                                        
                                         return (
                                             <>
-                                                <div className="flex justify-between items-center"><span className="flex items-center gap-1"><div className="w-2 h-2 rounded-full bg-indigo-500"></div>주중</span> <span>{wd.toLocaleString()} ({((wd/total)*100).toFixed(1)}%)</span></div>
-                                                <div className="flex justify-between items-center"><span className="flex items-center gap-1"><div className="w-2 h-2 rounded-full bg-rose-500"></div>주말</span> <span>{we.toLocaleString()} ({((we/total)*100).toFixed(1)}%)</span></div>
+                                                <div className="flex justify-between items-center"><span className="flex items-center gap-1"><div className="w-2 h-2 rounded-full bg-indigo-500"></div>주중</span> <span>{wdDisplay} ({((wd/total)*100).toFixed(1)}%)</span></div>
+                                                <div className="flex justify-between items-center"><span className="flex items-center gap-1"><div className="w-2 h-2 rounded-full bg-rose-500"></div>주말</span> <span>{weDisplay} ({((we/total)*100).toFixed(1)}%)</span></div>
                                             </>
                                         );
                                     })()}
@@ -864,7 +868,7 @@ const App: React.FC = () => {
                                                 <Cell fill="#3b82f6" /> {/* Blue */}
                                                 <Cell fill="#ec4899" /> {/* Pink */}
                                             </Pie>
-                                            <Tooltip formatter={(val: number) => val.toLocaleString()} />
+                                            <Tooltip formatter={(val: number) => salesViewMode === 'amount' ? `${(val/100000000).toFixed(2)}억원` : `${val.toLocaleString()}건`} />
                                         </PieChart>
                                     </ResponsiveContainer>
                                 </div>
@@ -873,10 +877,13 @@ const App: React.FC = () => {
                                         const m = salesViewMode === 'amount' ? currentSeoulData.genderAmount.male : currentSeoulData.genderCount.male;
                                         const f = salesViewMode === 'amount' ? currentSeoulData.genderAmount.female : currentSeoulData.genderCount.female;
                                         const total = m + f || 1;
+                                        const mDisplay = salesViewMode === 'amount' ? (m/100000000).toFixed(1) + '억원' : m.toLocaleString() + '건';
+                                        const fDisplay = salesViewMode === 'amount' ? (f/100000000).toFixed(1) + '억원' : f.toLocaleString() + '건';
+
                                         return (
                                             <>
-                                                <div className="flex justify-between items-center"><span className="flex items-center gap-1"><div className="w-2 h-2 rounded-full bg-blue-500"></div>남성</span> <span>{m.toLocaleString()} ({((m/total)*100).toFixed(1)}%)</span></div>
-                                                <div className="flex justify-between items-center"><span className="flex items-center gap-1"><div className="w-2 h-2 rounded-full bg-pink-500"></div>여성</span> <span>{f.toLocaleString()} ({((f/total)*100).toFixed(1)}%)</span></div>
+                                                <div className="flex justify-between items-center"><span className="flex items-center gap-1"><div className="w-2 h-2 rounded-full bg-blue-500"></div>남성</span> <span>{mDisplay} ({((m/total)*100).toFixed(1)}%)</span></div>
+                                                <div className="flex justify-between items-center"><span className="flex items-center gap-1"><div className="w-2 h-2 rounded-full bg-pink-500"></div>여성</span> <span>{fDisplay} ({((f/total)*100).toFixed(1)}%)</span></div>
                                             </>
                                         );
                                     })()}
@@ -893,7 +900,8 @@ const App: React.FC = () => {
                                     {Object.keys(currentSeoulData.timeAmount).map(t => {
                                         const val = salesViewMode === 'amount' ? currentSeoulData.timeAmount[t] : currentSeoulData.timeCount[t];
                                         const maxVal = Math.max(...Object.values(salesViewMode === 'amount' ? currentSeoulData.timeAmount : currentSeoulData.timeCount)) || 1;
-                                        const unit = salesViewMode === 'amount' ? '원' : '건';
+                                        const unit = salesViewMode === 'amount' ? '억원' : '건';
+                                        const displayVal = salesViewMode === 'amount' ? (val / 100000000).toFixed(1) : val.toLocaleString();
                                         
                                         return (
                                             <div key={t} className="flex items-center gap-2">
@@ -901,7 +909,7 @@ const App: React.FC = () => {
                                                 <div className="flex-1 h-3 bg-gray-100 rounded-full overflow-hidden max-w-[50%]">
                                                     <div className="h-full bg-green-400 rounded-full transition-all duration-500" style={{ width: `${(val/maxVal)*100}%` }}></div>
                                                 </div>
-                                                <span className="flex-1 text-right text-gray-700 font-medium truncate">{val.toLocaleString()}{unit}</span>
+                                                <span className="flex-1 text-right text-gray-700 font-medium truncate">{displayVal}{unit}</span>
                                             </div>
                                         )
                                     })}
@@ -915,7 +923,8 @@ const App: React.FC = () => {
                                     {Object.keys(currentSeoulData.ageAmount).map(a => {
                                         const val = salesViewMode === 'amount' ? currentSeoulData.ageAmount[a] : currentSeoulData.ageCount[a];
                                         const maxVal = Math.max(...Object.values(salesViewMode === 'amount' ? currentSeoulData.ageAmount : currentSeoulData.ageCount)) || 1;
-                                        const unit = salesViewMode === 'amount' ? '원' : '건';
+                                        const unit = salesViewMode === 'amount' ? '억원' : '건';
+                                        const displayVal = salesViewMode === 'amount' ? (val / 100000000).toFixed(1) : val.toLocaleString();
 
                                         return (
                                             <div key={a} className="flex items-center gap-2">
@@ -923,7 +932,7 @@ const App: React.FC = () => {
                                                 <div className="w-1/2 h-3 bg-gray-100 rounded-full overflow-hidden">
                                                     <div className="h-full bg-orange-400 rounded-full transition-all duration-500" style={{ width: `${(val/maxVal)*100}%` }}></div>
                                                 </div>
-                                                <span className="flex-1 text-right text-gray-700 font-medium truncate pl-2">{val.toLocaleString()}{unit}</span>
+                                                <span className="flex-1 text-right text-gray-700 font-medium truncate pl-2">{displayVal}{unit}</span>
                                             </div>
                                         )
                                     })}
