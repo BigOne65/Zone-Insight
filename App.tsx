@@ -448,16 +448,16 @@ const App: React.FC = () => {
            <div className="flex justify-center mb-6">
                <div className="bg-gray-100 p-1 rounded-xl inline-flex shadow-inner">
                    <button 
-                       onClick={() => setSearchType('trade')}
-                       className={`px-4 py-2 rounded-lg text-sm font-bold transition-all duration-200 ${searchType === 'trade' ? 'bg-white text-blue-600 shadow-sm' : 'text-gray-500 hover:text-gray-700'}`}
-                   >
-                       주요 상권 기준
-                   </button>
-                   <button 
                        onClick={() => setSearchType('admin')}
                        className={`px-4 py-2 rounded-lg text-sm font-bold transition-all duration-200 ${searchType === 'admin' ? 'bg-white text-green-600 shadow-sm' : 'text-gray-500 hover:text-gray-700'}`}
                    >
                        행정 구역 기준
+                   </button>
+                   <button 
+                       onClick={() => setSearchType('trade')}
+                       className={`px-4 py-2 rounded-lg text-sm font-bold transition-all duration-200 ${searchType === 'trade' ? 'bg-white text-blue-600 shadow-sm' : 'text-gray-500 hover:text-gray-700'}`}
+                   >
+                       주요 상권 기준
                    </button>
                </div>
            </div>
@@ -702,8 +702,8 @@ const App: React.FC = () => {
                                                     nameKey="name"
                                                     cx="50%"
                                                     cy="50%"
-                                                    outerRadius={90}
-                                                    innerRadius={50}
+                                                    outerRadius={75}
+                                                    innerRadius={40}
                                                     onClick={(data) => setSelectedSeoulIndustry(prev => prev === data.name ? null : data.name)}
                                                     cursor="pointer"
                                                     paddingAngle={2}
