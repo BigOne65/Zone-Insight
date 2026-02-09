@@ -510,7 +510,7 @@ const App: React.FC = () => {
                 <ul className="space-y-3 text-gray-600">
                     <li className="flex gap-3">
                         <span className="flex-shrink-0 w-6 h-6 bg-gray-200 rounded-full flex items-center justify-center font-bold text-xs text-gray-700">1</span>
-                        <span>분석 기준(주요 상권/행정 구역)을 선택하고, 주소를 입력하여 검색합니다.</span>
+                        <span>분석 기준(행정 구역/주요 상권)을 선택하고, 주소를 입력하여 검색합니다.</span>
                     </li>
                     <li className="flex gap-3">
                         <span className="flex-shrink-0 w-6 h-6 bg-gray-200 rounded-full flex items-center justify-center font-bold text-xs text-gray-700">2</span>
@@ -1038,6 +1038,19 @@ const App: React.FC = () => {
                  <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
                      <div className="bg-white p-4 md:p-6 rounded-xl shadow-sm border">
                          <h3 className="text-lg font-bold text-gray-800 mb-4 flex items-center gap-2"><Icons.Building className="text-indigo-500"/> 상가 밀집 건물 Top 5</h3>
+                         
+                         <div className="w-full h-48 bg-gray-100 rounded-lg mb-4 overflow-hidden border border-gray-200 relative z-0">
+                            <TradeMap 
+                               lat={tradeZone.searchLat!} 
+                               lon={tradeZone.searchLon!} 
+                               polygonCoords={tradeZone.parsedPolygon} 
+                               tradeName={tradeZone.mainTrarNm} 
+                               markers={storeStats.buildingData}
+                               selectedMarkerIndex={selectedBuildingIndex}
+                               onMarkerClick={(index) => setSelectedBuildingIndex(prev => prev === index ? null : index)}
+                            />
+                         </div>
+
                          <ul className="space-y-2">
                             {storeStats.buildingData.map((b,i) => (
                                <li key={i} 
