@@ -63,9 +63,15 @@ const renderActiveShape = (props: any) => {
 const CustomLegend = (props: any) => {
   const { payload, selectedIndustry, onSelect } = props;
   
+  // payload 데이터를 값(value) 기준으로 내림차순 정렬
+  const sortedPayload = useMemo(() => {
+      if (!payload) return [];
+      return [...payload].sort((a: any, b: any) => (b.payload?.value || 0) - (a.payload?.value || 0));
+  }, [payload]);
+
   return (
     <ul className="flex flex-col gap-1 pl-4 text-xs">
-      {payload.map((entry: any, index: number) => {
+      {sortedPayload.map((entry: any, index: number) => {
         const isSelected = selectedIndustry === entry.value;
         const isDimmed = selectedIndustry && !isSelected;
         
@@ -766,6 +772,7 @@ const App: React.FC = () => {
                                             // Simple bar height calc
                                             const maxVal = Math.max(...Object.values(salesViewMode === 'amount' ? currentSeoulData.dayAmount : currentSeoulData.dayCount)) || 1;
                                             const percent = (val / maxVal) * 100;
+                                            const unit = salesViewMode === 'amount' ? '원' : '건';
 
                                             return (
                                                 <div key={d} className="flex flex-col items-center gap-1 h-full justify-end">
@@ -773,7 +780,9 @@ const App: React.FC = () => {
                                                         <div className="w-full bg-indigo-400 rounded-t-sm opacity-80 transition-all duration-500" style={{ height: `${percent}%` }}></div>
                                                     </div>
                                                     <span className="text-xs font-bold text-gray-600">{mapDay[d]}</span>
-                                                    <span className="text-[10px] text-gray-400 scale-90">{val > 1000000 ? (val/10000).toFixed(0)+'만' : val.toLocaleString()}</span>
+                                                    <span className="text-[10px] text-gray-400 scale-90 tracking-tighter">
+                                                        {val.toLocaleString()}{unit}
+                                                    </span>
                                                 </div>
                                             )
                                         })}
@@ -892,7 +901,7 @@ const App: React.FC = () => {
                                                 <div className="flex-1 h-3 bg-gray-100 rounded-full overflow-hidden max-w-[50%]">
                                                     <div className="h-full bg-green-400 rounded-full transition-all duration-500" style={{ width: `${(val/maxVal)*100}%` }}></div>
                                                 </div>
-                                                <span className="w-28 text-right text-gray-700 font-medium truncate">{val.toLocaleString()}{unit}</span>
+                                                <span className="flex-1 text-right text-gray-700 font-medium truncate">{val.toLocaleString()}{unit}</span>
                                             </div>
                                         )
                                     })}
@@ -906,13 +915,15 @@ const App: React.FC = () => {
                                     {Object.keys(currentSeoulData.ageAmount).map(a => {
                                         const val = salesViewMode === 'amount' ? currentSeoulData.ageAmount[a] : currentSeoulData.ageCount[a];
                                         const maxVal = Math.max(...Object.values(salesViewMode === 'amount' ? currentSeoulData.ageAmount : currentSeoulData.ageCount)) || 1;
+                                        const unit = salesViewMode === 'amount' ? '원' : '건';
+
                                         return (
                                             <div key={a} className="flex items-center gap-2">
                                                 <span className="w-10 text-gray-500 font-medium">{a}대</span>
                                                 <div className="w-1/2 h-3 bg-gray-100 rounded-full overflow-hidden">
                                                     <div className="h-full bg-orange-400 rounded-full transition-all duration-500" style={{ width: `${(val/maxVal)*100}%` }}></div>
                                                 </div>
-                                                <span className="flex-1 text-right text-gray-700 font-medium truncate pl-2">{val.toLocaleString()}</span>
+                                                <span className="flex-1 text-right text-gray-700 font-medium truncate pl-2">{val.toLocaleString()}{unit}</span>
                                             </div>
                                         )
                                     })}
