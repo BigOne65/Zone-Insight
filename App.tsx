@@ -59,6 +59,17 @@ const renderActiveShape = (props: any) => {
   );
 };
 
+// Formatter for Sales Data
+const formatSalesValue = (value: number, mode: 'amount' | 'count') => {
+    if (mode === 'count') {
+        return value.toLocaleString();
+    }
+    // For amount: Convert to 'Eok' (100 million) and format with commas and 1 decimal place
+    const eokValue = value / 100000000;
+    // toLocaleString with maximumFractionDigits handles the commas for thousands (e.g. 1,234.5)
+    return eokValue.toLocaleString(undefined, { minimumFractionDigits: 1, maximumFractionDigits: 1 });
+};
+
 // Custom Legend Component to handle pointer cursor and opacity
 const CustomLegend = (props: any) => {
   const { payload, selectedIndustry, onSelect } = props;
@@ -724,7 +735,7 @@ const App: React.FC = () => {
                                                 <Tooltip 
                                                     formatter={(value: number) => 
                                                         salesViewMode === 'amount' 
-                                                            ? `${(value / 100000000).toFixed(2)}억원` 
+                                                            ? `${formatSalesValue(value, 'amount')}억원` 
                                                             : `${value.toLocaleString()}건`
                                                     } 
                                                 />
@@ -773,7 +784,7 @@ const App: React.FC = () => {
                                             const maxVal = Math.max(...Object.values(salesViewMode === 'amount' ? currentSeoulData.dayAmount : currentSeoulData.dayCount)) || 1;
                                             const percent = (val / maxVal) * 100;
                                             const unit = salesViewMode === 'amount' ? '억원' : '건';
-                                            const displayVal = salesViewMode === 'amount' ? (val / 100000000).toFixed(1) : val.toLocaleString();
+                                            const displayVal = formatSalesValue(val, salesViewMode);
 
                                             return (
                                                 <div key={d} className="flex flex-col items-center gap-1 h-full justify-end">
@@ -781,7 +792,7 @@ const App: React.FC = () => {
                                                         <div className="w-full bg-indigo-400 rounded-t-sm opacity-80 transition-all duration-500" style={{ height: `${percent}%` }}></div>
                                                     </div>
                                                     <span className="text-xs font-bold text-gray-600">{mapDay[d]}</span>
-                                                    <span className="text-[10px] text-gray-400 scale-90 tracking-tighter">
+                                                    <span className="text-[10px] text-gray-400 scale-90 tracking-tighter whitespace-nowrap">
                                                         {displayVal}{unit}
                                                     </span>
                                                 </div>
@@ -799,7 +810,7 @@ const App: React.FC = () => {
                             </p>
                             <p className="text-3xl font-black text-indigo-600">
                                 {salesViewMode === 'amount' 
-                                    ? <>{(currentSeoulData.totalAmount / 100000000).toFixed(2)}<span className="text-lg text-gray-500 ml-1">억원</span></>
+                                    ? <>{formatSalesValue(currentSeoulData.totalAmount, 'amount')}<span className="text-lg text-gray-500 ml-1">억원</span></>
                                     : <>{(currentSeoulData.totalCount).toLocaleString()}<span className="text-lg text-gray-500 ml-1">건</span></>
                                 }
                             </p>
@@ -809,84 +820,104 @@ const App: React.FC = () => {
                             {/* 1. Weekday vs Weekend */}
                             <div className="bg-white border rounded-xl p-4">
                                 <h4 className="font-bold text-gray-700 mb-4 flex items-center gap-2 text-sm">주중 / 주말 비율</h4>
-                                <div className="h-40 flex items-center justify-center relative">
-                                    <ResponsiveContainer width="100%" height="100%">
-                                        <PieChart>
-                                            <Pie
-                                                data={[
-                                                    { name: '주중', value: salesViewMode === 'amount' ? currentSeoulData.weekdayAmount : currentSeoulData.weekdayCount },
-                                                    { name: '주말', value: salesViewMode === 'amount' ? currentSeoulData.weekendAmount : currentSeoulData.weekendCount }
-                                                ]}
-                                                cx="50%" cy="50%" innerRadius={40} outerRadius={60} dataKey="value"
-                                            >
-                                                <Cell fill="#6366f1" /> {/* Indigo */}
-                                                <Cell fill="#f43f5e" /> {/* Rose */}
-                                            </Pie>
-                                            <Tooltip formatter={(val: number) => salesViewMode === 'amount' ? `${(val/100000000).toFixed(2)}억원` : `${val.toLocaleString()}건`} />
-                                        </PieChart>
-                                    </ResponsiveContainer>
-                                    <div className="absolute inset-0 flex items-center justify-center pointer-events-none">
-                                        <div className="text-center text-xs text-gray-500">
-                                            <div>주중</div>
-                                            <div className="font-bold text-indigo-600">
-                                                {(( (salesViewMode==='amount' ? currentSeoulData.weekdayAmount : currentSeoulData.weekdayCount) / (salesViewMode==='amount' ? currentSeoulData.totalAmount : currentSeoulData.totalCount || 1) ) * 100).toFixed(0)}%
+                                <div className="flex items-center">
+                                    <div className="h-40 w-1/2 flex items-center justify-center relative">
+                                        <ResponsiveContainer width="100%" height="100%">
+                                            <PieChart>
+                                                <Pie
+                                                    data={[
+                                                        { name: '주중', value: salesViewMode === 'amount' ? currentSeoulData.weekdayAmount : currentSeoulData.weekdayCount },
+                                                        { name: '주말', value: salesViewMode === 'amount' ? currentSeoulData.weekendAmount : currentSeoulData.weekendCount }
+                                                    ]}
+                                                    cx="50%" cy="50%" innerRadius={40} outerRadius={60} dataKey="value"
+                                                >
+                                                    <Cell fill="#6366f1" /> {/* Indigo */}
+                                                    <Cell fill="#f43f5e" /> {/* Rose */}
+                                                </Pie>
+                                                <Tooltip formatter={(val: number) => salesViewMode === 'amount' ? `${formatSalesValue(val, 'amount')}억원` : `${val.toLocaleString()}건`} />
+                                            </PieChart>
+                                        </ResponsiveContainer>
+                                        <div className="absolute inset-0 flex items-center justify-center pointer-events-none">
+                                            <div className="text-center text-xs text-gray-500">
+                                                <div>주중</div>
+                                                <div className="font-bold text-indigo-600">
+                                                    {(( (salesViewMode==='amount' ? currentSeoulData.weekdayAmount : currentSeoulData.weekdayCount) / (salesViewMode==='amount' ? currentSeoulData.totalAmount : currentSeoulData.totalCount || 1) ) * 100).toFixed(0)}%
+                                                </div>
                                             </div>
                                         </div>
                                     </div>
-                                </div>
-                                <div className="flex flex-col gap-1 text-xs mt-2 text-gray-600">
-                                    {(() => {
-                                        const wd = salesViewMode === 'amount' ? currentSeoulData.weekdayAmount : currentSeoulData.weekdayCount;
-                                        const we = salesViewMode === 'amount' ? currentSeoulData.weekendAmount : currentSeoulData.weekendCount;
-                                        const total = wd + we || 1;
-                                        const wdDisplay = salesViewMode === 'amount' ? (wd/100000000).toFixed(1) + '억원' : wd.toLocaleString() + '건';
-                                        const weDisplay = salesViewMode === 'amount' ? (we/100000000).toFixed(1) + '억원' : we.toLocaleString() + '건';
-                                        
-                                        return (
-                                            <>
-                                                <div className="flex justify-between items-center"><span className="flex items-center gap-1"><div className="w-2 h-2 rounded-full bg-indigo-500"></div>주중</span> <span>{wdDisplay} ({((wd/total)*100).toFixed(1)}%)</span></div>
-                                                <div className="flex justify-between items-center"><span className="flex items-center gap-1"><div className="w-2 h-2 rounded-full bg-rose-500"></div>주말</span> <span>{weDisplay} ({((we/total)*100).toFixed(1)}%)</span></div>
-                                            </>
-                                        );
-                                    })()}
+                                    <div className="w-1/2 flex flex-col gap-2 text-xs text-gray-600 pl-4 border-l border-gray-100">
+                                        {(() => {
+                                            const wd = salesViewMode === 'amount' ? currentSeoulData.weekdayAmount : currentSeoulData.weekdayCount;
+                                            const we = salesViewMode === 'amount' ? currentSeoulData.weekendAmount : currentSeoulData.weekendCount;
+                                            const total = wd + we || 1;
+                                            const wdDisplay = salesViewMode === 'amount' ? formatSalesValue(wd, 'amount') + '억원' : wd.toLocaleString() + '건';
+                                            const weDisplay = salesViewMode === 'amount' ? formatSalesValue(we, 'amount') + '억원' : we.toLocaleString() + '건';
+                                            
+                                            return (
+                                                <>
+                                                    <div>
+                                                        <div className="flex items-center gap-1 mb-1"><div className="w-2 h-2 rounded-full bg-indigo-500"></div>주중</div>
+                                                        <div className="font-bold text-gray-800 text-sm">{wdDisplay}</div>
+                                                        <div className="text-gray-400">({((wd/total)*100).toFixed(1)}%)</div>
+                                                    </div>
+                                                    <div>
+                                                        <div className="flex items-center gap-1 mb-1"><div className="w-2 h-2 rounded-full bg-rose-500"></div>주말</div>
+                                                        <div className="font-bold text-gray-800 text-sm">{weDisplay}</div>
+                                                        <div className="text-gray-400">({((we/total)*100).toFixed(1)}%)</div>
+                                                    </div>
+                                                </>
+                                            );
+                                        })()}
+                                    </div>
                                 </div>
                             </div>
 
                             {/* 2. Gender Ratio */}
                             <div className="bg-white border rounded-xl p-4">
                                 <h4 className="font-bold text-gray-700 mb-4 flex items-center gap-2 text-sm">남성 / 여성 비율</h4>
-                                <div className="h-40 flex items-center justify-center relative">
-                                     <ResponsiveContainer width="100%" height="100%">
-                                        <PieChart>
-                                            <Pie
-                                                data={[
-                                                    { name: '남성', value: salesViewMode === 'amount' ? currentSeoulData.genderAmount.male : currentSeoulData.genderCount.male },
-                                                    { name: '여성', value: salesViewMode === 'amount' ? currentSeoulData.genderAmount.female : currentSeoulData.genderCount.female }
-                                                ]}
-                                                cx="50%" cy="50%" innerRadius={40} outerRadius={60} dataKey="value"
-                                            >
-                                                <Cell fill="#3b82f6" /> {/* Blue */}
-                                                <Cell fill="#ec4899" /> {/* Pink */}
-                                            </Pie>
-                                            <Tooltip formatter={(val: number) => salesViewMode === 'amount' ? `${(val/100000000).toFixed(2)}억원` : `${val.toLocaleString()}건`} />
-                                        </PieChart>
-                                    </ResponsiveContainer>
-                                </div>
-                                <div className="flex flex-col gap-1 text-xs mt-2 text-gray-600">
-                                    {(() => {
-                                        const m = salesViewMode === 'amount' ? currentSeoulData.genderAmount.male : currentSeoulData.genderCount.male;
-                                        const f = salesViewMode === 'amount' ? currentSeoulData.genderAmount.female : currentSeoulData.genderCount.female;
-                                        const total = m + f || 1;
-                                        const mDisplay = salesViewMode === 'amount' ? (m/100000000).toFixed(1) + '억원' : m.toLocaleString() + '건';
-                                        const fDisplay = salesViewMode === 'amount' ? (f/100000000).toFixed(1) + '억원' : f.toLocaleString() + '건';
+                                <div className="flex items-center">
+                                    <div className="h-40 w-1/2 flex items-center justify-center relative">
+                                         <ResponsiveContainer width="100%" height="100%">
+                                            <PieChart>
+                                                <Pie
+                                                    data={[
+                                                        { name: '남성', value: salesViewMode === 'amount' ? currentSeoulData.genderAmount.male : currentSeoulData.genderCount.male },
+                                                        { name: '여성', value: salesViewMode === 'amount' ? currentSeoulData.genderAmount.female : currentSeoulData.genderCount.female }
+                                                    ]}
+                                                    cx="50%" cy="50%" innerRadius={40} outerRadius={60} dataKey="value"
+                                                >
+                                                    <Cell fill="#3b82f6" /> {/* Blue */}
+                                                    <Cell fill="#ec4899" /> {/* Pink */}
+                                                </Pie>
+                                                <Tooltip formatter={(val: number) => salesViewMode === 'amount' ? `${formatSalesValue(val, 'amount')}억원` : `${val.toLocaleString()}건`} />
+                                            </PieChart>
+                                        </ResponsiveContainer>
+                                    </div>
+                                    <div className="w-1/2 flex flex-col gap-2 text-xs text-gray-600 pl-4 border-l border-gray-100">
+                                        {(() => {
+                                            const m = salesViewMode === 'amount' ? currentSeoulData.genderAmount.male : currentSeoulData.genderCount.male;
+                                            const f = salesViewMode === 'amount' ? currentSeoulData.genderAmount.female : currentSeoulData.genderCount.female;
+                                            const total = m + f || 1;
+                                            const mDisplay = salesViewMode === 'amount' ? formatSalesValue(m, 'amount') + '억원' : m.toLocaleString() + '건';
+                                            const fDisplay = salesViewMode === 'amount' ? formatSalesValue(f, 'amount') + '억원' : f.toLocaleString() + '건';
 
-                                        return (
-                                            <>
-                                                <div className="flex justify-between items-center"><span className="flex items-center gap-1"><div className="w-2 h-2 rounded-full bg-blue-500"></div>남성</span> <span>{mDisplay} ({((m/total)*100).toFixed(1)}%)</span></div>
-                                                <div className="flex justify-between items-center"><span className="flex items-center gap-1"><div className="w-2 h-2 rounded-full bg-pink-500"></div>여성</span> <span>{fDisplay} ({((f/total)*100).toFixed(1)}%)</span></div>
-                                            </>
-                                        );
-                                    })()}
+                                            return (
+                                                <>
+                                                    <div>
+                                                        <div className="flex items-center gap-1 mb-1"><div className="w-2 h-2 rounded-full bg-blue-500"></div>남성</div>
+                                                        <div className="font-bold text-gray-800 text-sm">{mDisplay}</div>
+                                                        <div className="text-gray-400">({((m/total)*100).toFixed(1)}%)</div>
+                                                    </div>
+                                                    <div>
+                                                        <div className="flex items-center gap-1 mb-1"><div className="w-2 h-2 rounded-full bg-pink-500"></div>여성</div>
+                                                        <div className="font-bold text-gray-800 text-sm">{fDisplay}</div>
+                                                        <div className="text-gray-400">({((f/total)*100).toFixed(1)}%)</div>
+                                                    </div>
+                                                </>
+                                            );
+                                        })()}
+                                    </div>
                                 </div>
                             </div>
                         </div>
@@ -901,15 +932,15 @@ const App: React.FC = () => {
                                         const val = salesViewMode === 'amount' ? currentSeoulData.timeAmount[t] : currentSeoulData.timeCount[t];
                                         const maxVal = Math.max(...Object.values(salesViewMode === 'amount' ? currentSeoulData.timeAmount : currentSeoulData.timeCount)) || 1;
                                         const unit = salesViewMode === 'amount' ? '억원' : '건';
-                                        const displayVal = salesViewMode === 'amount' ? (val / 100000000).toFixed(1) : val.toLocaleString();
+                                        const displayVal = formatSalesValue(val, salesViewMode);
                                         
                                         return (
                                             <div key={t} className="flex items-center gap-2">
-                                                <span className="w-12 text-gray-500 font-medium">{t.replace('_', '~')}시</span>
-                                                <div className="flex-1 h-3 bg-gray-100 rounded-full overflow-hidden max-w-[50%]">
+                                                <span className="w-14 text-gray-500 font-medium">{t.replace('_', '~')}시</span>
+                                                <div className="flex-1 h-3 bg-gray-100 rounded-full overflow-hidden">
                                                     <div className="h-full bg-green-400 rounded-full transition-all duration-500" style={{ width: `${(val/maxVal)*100}%` }}></div>
                                                 </div>
-                                                <span className="flex-1 text-right text-gray-700 font-medium truncate">{displayVal}{unit}</span>
+                                                <span className="w-20 text-right text-gray-700 font-medium whitespace-nowrap">{displayVal}{unit}</span>
                                             </div>
                                         )
                                     })}
@@ -924,15 +955,15 @@ const App: React.FC = () => {
                                         const val = salesViewMode === 'amount' ? currentSeoulData.ageAmount[a] : currentSeoulData.ageCount[a];
                                         const maxVal = Math.max(...Object.values(salesViewMode === 'amount' ? currentSeoulData.ageAmount : currentSeoulData.ageCount)) || 1;
                                         const unit = salesViewMode === 'amount' ? '억원' : '건';
-                                        const displayVal = salesViewMode === 'amount' ? (val / 100000000).toFixed(1) : val.toLocaleString();
+                                        const displayVal = formatSalesValue(val, salesViewMode);
 
                                         return (
                                             <div key={a} className="flex items-center gap-2">
                                                 <span className="w-10 text-gray-500 font-medium">{a}대</span>
-                                                <div className="w-1/2 h-3 bg-gray-100 rounded-full overflow-hidden">
+                                                <div className="flex-1 h-3 bg-gray-100 rounded-full overflow-hidden">
                                                     <div className="h-full bg-orange-400 rounded-full transition-all duration-500" style={{ width: `${(val/maxVal)*100}%` }}></div>
                                                 </div>
-                                                <span className="flex-1 text-right text-gray-700 font-medium truncate pl-2">{displayVal}{unit}</span>
+                                                <span className="w-20 text-right text-gray-700 font-medium whitespace-nowrap pl-2">{displayVal}{unit}</span>
                                             </div>
                                         )
                                     })}
