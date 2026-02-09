@@ -780,16 +780,28 @@ const App: React.FC = () => {
                                         {['MON','TUE','WED','THU','FRI','SAT','SUN'].map((d) => {
                                             const mapDay: any = { MON:'월', TUE:'화', WED:'수', THU:'목', FRI:'금', SAT:'토', SUN:'일' };
                                             const val = salesViewMode === 'amount' ? currentSeoulData.dayAmount[d] : currentSeoulData.dayCount[d];
-                                            // Simple bar height calc
+                                            const total = salesViewMode === 'amount' ? currentSeoulData.totalAmount : currentSeoulData.totalCount;
+                                            
                                             const maxVal = Math.max(...Object.values(salesViewMode === 'amount' ? currentSeoulData.dayAmount : currentSeoulData.dayCount)) || 1;
                                             const percent = (val / maxVal) * 100;
+                                            const ratio = total > 0 ? ((val / total) * 100).toFixed(1) : "0";
+
                                             const unit = salesViewMode === 'amount' ? '억원' : '건';
                                             const displayVal = formatSalesValue(val, salesViewMode);
 
                                             return (
-                                                <div key={d} className="flex flex-col items-center gap-1 h-full justify-end">
+                                                <div key={d} className="flex flex-col items-center gap-1 h-full justify-end group">
                                                     <div className="w-full bg-gray-100 rounded-t-sm relative h-full flex items-end justify-center">
-                                                        <div className="w-full bg-indigo-400 rounded-t-sm opacity-80 transition-all duration-500" style={{ height: `${percent}%` }}></div>
+                                                        <div className="w-full bg-indigo-400 rounded-t-sm opacity-80 transition-all duration-500 group-hover:opacity-100" style={{ height: `${percent}%` }}></div>
+                                                        {/* Percentage Label Overlay */}
+                                                        <span 
+                                                            className={`absolute text-[10px] font-bold tracking-tighter ${percent > 15 ? 'text-white' : 'text-indigo-600'}`}
+                                                            style={{ 
+                                                                bottom: percent > 15 ? `calc(${percent}% - 14px)` : `calc(${percent}% + 2px)` 
+                                                            }}
+                                                        >
+                                                            {ratio}%
+                                                        </span>
                                                     </div>
                                                     <span className="text-xs font-bold text-gray-600">{mapDay[d]}</span>
                                                     <span className="text-[10px] text-gray-400 scale-90 tracking-tighter whitespace-nowrap">
