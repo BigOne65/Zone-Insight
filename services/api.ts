@@ -637,20 +637,20 @@ export const fetchSeoulSalesData = async (adminCode: string): Promise<SeoulSales
             target.dayCount.SAT += getNum(row, "SAT_SELNG_CO");
             target.dayCount.SUN += getNum(row, "SUN_SELNG_CO");
 
-            // Times
-            target.timeAmount["00_06"] += getNum(row, "TMZN_00_06_SELNG_AMT");
-            target.timeAmount["06_11"] += getNum(row, "TMZN_06_11_SELNG_AMT");
-            target.timeAmount["11_14"] += getNum(row, "TMZN_11_14_SELNG_AMT");
-            target.timeAmount["14_17"] += getNum(row, "TMZN_14_17_SELNG_AMT");
-            target.timeAmount["17_21"] += getNum(row, "TMZN_17_21_SELNG_AMT");
-            target.timeAmount["21_24"] += getNum(row, "TMZN_21_24_SELNG_AMT");
+            // Times (Revised to match CSV Header: TMZON_ instead of TMZN_)
+            target.timeAmount["00_06"] += getNum(row, "TMZON_00_06_SELNG_AMT");
+            target.timeAmount["06_11"] += getNum(row, "TMZON_06_11_SELNG_AMT");
+            target.timeAmount["11_14"] += getNum(row, "TMZON_11_14_SELNG_AMT");
+            target.timeAmount["14_17"] += getNum(row, "TMZON_14_17_SELNG_AMT");
+            target.timeAmount["17_21"] += getNum(row, "TMZON_17_21_SELNG_AMT");
+            target.timeAmount["21_24"] += getNum(row, "TMZON_21_24_SELNG_AMT");
 
-            target.timeCount["00_06"] += getNum(row, "TMZN_00_06_SELNG_CO");
-            target.timeCount["06_11"] += getNum(row, "TMZN_06_11_SELNG_CO");
-            target.timeCount["11_14"] += getNum(row, "TMZN_11_14_SELNG_CO");
-            target.timeCount["14_17"] += getNum(row, "TMZN_14_17_SELNG_CO");
-            target.timeCount["17_21"] += getNum(row, "TMZN_17_21_SELNG_CO");
-            target.timeCount["21_24"] += getNum(row, "TMZN_21_24_SELNG_CO");
+            target.timeCount["00_06"] += getNum(row, "TMZON_00_06_SELNG_CO");
+            target.timeCount["06_11"] += getNum(row, "TMZON_06_11_SELNG_CO");
+            target.timeCount["11_14"] += getNum(row, "TMZON_11_14_SELNG_CO");
+            target.timeCount["14_17"] += getNum(row, "TMZON_14_17_SELNG_CO");
+            target.timeCount["17_21"] += getNum(row, "TMZON_17_21_SELNG_CO");
+            target.timeCount["21_24"] += getNum(row, "TMZON_21_24_SELNG_CO");
 
             // Gender
             target.genderAmount.male += getNum(row, "ML_SELNG_AMT");

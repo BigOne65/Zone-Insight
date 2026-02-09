@@ -59,6 +59,32 @@ const renderActiveShape = (props: any) => {
   );
 };
 
+// Custom Legend Component to handle pointer cursor and opacity
+const CustomLegend = (props: any) => {
+  const { payload, selectedIndustry, onSelect } = props;
+  
+  return (
+    <ul className="flex flex-col gap-1 pl-4 text-xs">
+      {payload.map((entry: any, index: number) => {
+        const isSelected = selectedIndustry === entry.value;
+        const isDimmed = selectedIndustry && !isSelected;
+        
+        return (
+          <li 
+            key={`item-${index}`}
+            className="flex items-center gap-2 cursor-pointer hover:opacity-80 transition-opacity"
+            style={{ opacity: isDimmed ? 0.3 : 1 }}
+            onClick={() => onSelect(entry.value)}
+          >
+            <div className="w-2.5 h-2.5 rounded-full" style={{ backgroundColor: entry.color }} />
+            <span className="text-gray-600">{entry.value}</span>
+          </li>
+        );
+      })}
+    </ul>
+  );
+};
+
 const App: React.FC = () => {
   const [address, setAddress] = useState("");
   const [loading, setLoading] = useState(false);
@@ -692,7 +718,7 @@ const App: React.FC = () => {
                                                 <Tooltip 
                                                     formatter={(value: number) => 
                                                         salesViewMode === 'amount' 
-                                                            ? `${(value/100000000).toFixed(1)}억원` 
+                                                            ? `${(value).toLocaleString()}원` 
                                                             : `${value.toLocaleString()}건`
                                                     } 
                                                 />
@@ -700,10 +726,12 @@ const App: React.FC = () => {
                                                     layout="vertical" 
                                                     verticalAlign="middle" 
                                                     align="right"
-                                                    wrapperStyle={{ fontSize: '11px', lineHeight: '20px', paddingLeft: '20px' }}
-                                                    onClick={(e) => setSelectedSeoulIndustry(prev => prev === e.value ? null : e.value)}
-                                                    cursor="pointer"
-                                                    iconType="circle"
+                                                    content={
+                                                      <CustomLegend 
+                                                        selectedIndustry={selectedSeoulIndustry} 
+                                                        onSelect={(name: string) => setSelectedSeoulIndustry(prev => prev === name ? null : name)} 
+                                                      />
+                                                    }
                                                 />
                                             </PieChart>
                                         </ResponsiveContainer>
@@ -714,7 +742,7 @@ const App: React.FC = () => {
                                 </div>
                             )}
 
-                            {/* Right: Day of Week Analysis (Moved Here) */}
+                            {/* Right: Day of Week Analysis */}
                             <div className="w-full lg:w-1/2 bg-white border rounded-xl p-4">
                                 <h4 className="font-bold text-gray-700 mb-3 text-sm">요일별 {salesViewMode === 'amount' ? '매출' : '건수'} 분석</h4>
                                 <div className="flex flex-col gap-3 h-full justify-center">
@@ -767,7 +795,7 @@ const App: React.FC = () => {
                             </p>
                         </div>
 
-                        <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+                        <div className="grid grid-cols-1 md:grid-cols-2 gap-6 mb-6">
                             {/* 1. Weekday vs Weekend */}
                             <div className="bg-white border rounded-xl p-4">
                                 <h4 className="font-bold text-gray-700 mb-4 flex items-center gap-2 text-sm">주중 / 주말 비율</h4>
@@ -845,47 +873,47 @@ const App: React.FC = () => {
                                     })()}
                                 </div>
                             </div>
+                        </div>
 
-                            {/* 3. Time Slot Analysis & Age (Stacked) */}
-                            <div className="flex flex-col gap-4">
-                                {/* Time Slot */}
-                                <div className="bg-white border rounded-xl p-4 flex-1">
-                                    <h4 className="font-bold text-gray-700 mb-3 text-sm">시간대별 분석</h4>
-                                    <div className="text-xs space-y-2">
-                                        {Object.keys(currentSeoulData.timeAmount).map(t => {
-                                            const val = salesViewMode === 'amount' ? currentSeoulData.timeAmount[t] : currentSeoulData.timeCount[t];
-                                            const maxVal = Math.max(...Object.values(salesViewMode === 'amount' ? currentSeoulData.timeAmount : currentSeoulData.timeCount)) || 1;
-                                            return (
-                                                <div key={t} className="flex items-center gap-2">
-                                                    <span className="w-12 text-gray-500">{t.replace('_', '~')}시</span>
-                                                    <div className="flex-1 h-2 bg-gray-100 rounded-full overflow-hidden">
-                                                        <div className="h-full bg-green-400" style={{ width: `${(val/maxVal)*100}%` }}></div>
-                                                    </div>
-                                                    <span className="w-16 text-right text-gray-700 font-medium">{val > 100000 ? (val/10000).toFixed(0)+'만' : val.toLocaleString()}</span>
+                        {/* 3. Time Slot Analysis & Age Analysis Grid */}
+                        <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                            {/* Time Slot */}
+                            <div className="bg-white border rounded-xl p-4">
+                                <h4 className="font-bold text-gray-700 mb-3 text-sm">시간대별 분석</h4>
+                                <div className="text-xs space-y-3">
+                                    {Object.keys(currentSeoulData.timeAmount).map(t => {
+                                        const val = salesViewMode === 'amount' ? currentSeoulData.timeAmount[t] : currentSeoulData.timeCount[t];
+                                        const maxVal = Math.max(...Object.values(salesViewMode === 'amount' ? currentSeoulData.timeAmount : currentSeoulData.timeCount)) || 1;
+                                        return (
+                                            <div key={t} className="flex items-center gap-2">
+                                                <span className="w-12 text-gray-500 font-medium">{t.replace('_', '~')}시</span>
+                                                <div className="flex-1 h-3 bg-gray-100 rounded-full overflow-hidden">
+                                                    <div className="h-full bg-green-400 rounded-full transition-all duration-500" style={{ width: `${(val/maxVal)*100}%` }}></div>
                                                 </div>
-                                            )
-                                        })}
-                                    </div>
+                                                <span className="w-20 text-right text-gray-700 font-medium truncate">{val.toLocaleString()}</span>
+                                            </div>
+                                        )
+                                    })}
                                 </div>
+                            </div>
 
-                                {/* Age Analysis */}
-                                <div className="bg-white border rounded-xl p-4 flex-1">
-                                    <h4 className="font-bold text-gray-700 mb-3 text-sm">연령대별 분석</h4>
-                                    <div className="text-xs space-y-2">
-                                        {Object.keys(currentSeoulData.ageAmount).map(a => {
-                                            const val = salesViewMode === 'amount' ? currentSeoulData.ageAmount[a] : currentSeoulData.ageCount[a];
-                                            const maxVal = Math.max(...Object.values(salesViewMode === 'amount' ? currentSeoulData.ageAmount : currentSeoulData.ageCount)) || 1;
-                                            return (
-                                                <div key={a} className="flex items-center gap-2">
-                                                    <span className="w-8 text-gray-500">{a}대</span>
-                                                    <div className="flex-1 h-2 bg-gray-100 rounded-full overflow-hidden">
-                                                        <div className="h-full bg-orange-400" style={{ width: `${(val/maxVal)*100}%` }}></div>
-                                                    </div>
-                                                    <span className="w-16 text-right text-gray-700 font-medium">{val > 100000 ? (val/10000).toFixed(0)+'만' : val.toLocaleString()}</span>
+                            {/* Age Analysis */}
+                            <div className="bg-white border rounded-xl p-4">
+                                <h4 className="font-bold text-gray-700 mb-3 text-sm">연령대별 분석</h4>
+                                <div className="text-xs space-y-3">
+                                    {Object.keys(currentSeoulData.ageAmount).map(a => {
+                                        const val = salesViewMode === 'amount' ? currentSeoulData.ageAmount[a] : currentSeoulData.ageCount[a];
+                                        const maxVal = Math.max(...Object.values(salesViewMode === 'amount' ? currentSeoulData.ageAmount : currentSeoulData.ageCount)) || 1;
+                                        return (
+                                            <div key={a} className="flex items-center gap-2">
+                                                <span className="w-10 text-gray-500 font-medium">{a}대</span>
+                                                <div className="w-1/2 h-3 bg-gray-100 rounded-full overflow-hidden">
+                                                    <div className="h-full bg-orange-400 rounded-full transition-all duration-500" style={{ width: `${(val/maxVal)*100}%` }}></div>
                                                 </div>
-                                            )
-                                        })}
-                                    </div>
+                                                <span className="flex-1 text-right text-gray-700 font-medium truncate pl-2">{val.toLocaleString()}</span>
+                                            </div>
+                                        )
+                                    })}
                                 </div>
                             </div>
                         </div>
