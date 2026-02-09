@@ -884,13 +884,15 @@ const App: React.FC = () => {
                                     {Object.keys(currentSeoulData.timeAmount).map(t => {
                                         const val = salesViewMode === 'amount' ? currentSeoulData.timeAmount[t] : currentSeoulData.timeCount[t];
                                         const maxVal = Math.max(...Object.values(salesViewMode === 'amount' ? currentSeoulData.timeAmount : currentSeoulData.timeCount)) || 1;
+                                        const unit = salesViewMode === 'amount' ? '원' : '건';
+                                        
                                         return (
                                             <div key={t} className="flex items-center gap-2">
                                                 <span className="w-12 text-gray-500 font-medium">{t.replace('_', '~')}시</span>
-                                                <div className="flex-1 h-3 bg-gray-100 rounded-full overflow-hidden">
+                                                <div className="flex-1 h-3 bg-gray-100 rounded-full overflow-hidden max-w-[50%]">
                                                     <div className="h-full bg-green-400 rounded-full transition-all duration-500" style={{ width: `${(val/maxVal)*100}%` }}></div>
                                                 </div>
-                                                <span className="w-20 text-right text-gray-700 font-medium truncate">{val.toLocaleString()}</span>
+                                                <span className="w-28 text-right text-gray-700 font-medium truncate">{val.toLocaleString()}{unit}</span>
                                             </div>
                                         )
                                     })}
