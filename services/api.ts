@@ -587,7 +587,8 @@ export const fetchSeoulSalesData = async (adminCode: string): Promise<SeoulSales
         
         if (lines.length < 2) return null;
 
-        const headers = lines[0].split(',').map(h => h.trim());
+        // Clean headers: remove quotes and trim
+        const headers = lines[0].split(',').map(h => h.replace(/["']/g, '').trim());
         const getIdx = (colName: string) => headers.indexOf(colName);
 
         // Header Indices
@@ -602,7 +603,9 @@ export const fetchSeoulSalesData = async (adminCode: string): Promise<SeoulSales
         const getNum = (row: string[], colName: string) => {
              const idx = getIdx(colName);
              if(idx === -1) return 0;
-             const val = parseFloat(row[idx]);
+             // Remove any quotes from value before parsing
+             const valStr = row[idx] ? row[idx].replace(/["']/g, '') : "0";
+             const val = parseFloat(valStr);
              return isNaN(val) ? 0 : val;
         };
 
@@ -678,11 +681,16 @@ export const fetchSeoulSalesData = async (adminCode: string): Promise<SeoulSales
         
         // Loop lines
         for(let i=1; i<lines.length; i++) {
-            const row = lines[i].split(','); // Assuming standard CSV without quoted commas for now
-            if (row.length < headers.length) continue;
+            // Safer CSV splitting that respects quotes (basic implementation)
+            // Splitting by comma but ignoring commas inside double quotes
+            // Note: This regex is a simple approximation. For very complex CSVs, a library is recommended.
+            const row = lines[i].match(/(".*?"|[^",\s]+)(?=\s*,|\s*$)/g);
+            
+            if (!row || row.length < headers.length) continue;
             
             // CSV ADSTRD_CD might be string, compare with adminCode
-            const rowAdminCode = row[ADSTRD_CD];
+            // Remove quotes if present
+            const rowAdminCode = row[ADSTRD_CD] ? row[ADSTRD_CD].replace(/["']/g, '') : "";
             
             // Check match
             if (String(rowAdminCode) === String(adminCode)) {
@@ -690,7 +698,9 @@ export const fetchSeoulSalesData = async (adminCode: string): Promise<SeoulSales
                 accumulateRow(aggregatedData, row);
                 
                 // Industry Data
-                const svcName = SVC_NM !== -1 ? row[SVC_NM] : "기타";
+                const rawSvcName = SVC_NM !== -1 ? row[SVC_NM] : "기타";
+                const svcName = rawSvcName ? rawSvcName.replace(/["']/g, '') : "기타";
+                
                 if (!industryMap[svcName]) {
                     industryMap[svcName] = createEmptyData("20253", svcName);
                 }

@@ -357,6 +357,7 @@ const App: React.FC = () => {
       const mode = salesViewMode === 'amount' ? 'totalAmount' : 'totalCount';
       return seoulSales.byIndustry
           .map(item => ({ name: item.serviceName || '기타', value: item[mode] }))
+          .sort((a, b) => b.value - a.value) // Sort by value desc
           .filter(d => d.value > 0)
           .slice(0, 10); // Show Top 10 only for readability
   }, [seoulSales, salesViewMode]);
@@ -640,25 +641,27 @@ const App: React.FC = () => {
                             </div>
                         </div>
 
-                        {/* 0. Industry Distribution (Pie Chart) - Newly Added */}
-                        {seoulSales.byIndustry && seoulSales.byIndustry.length > 0 && (
-                            <div className="mb-8 p-4 bg-gray-50 rounded-xl border border-gray-200">
-                                <div className="flex justify-between items-center mb-4">
-                                    <h4 className="font-bold text-gray-700 text-sm flex items-center gap-2">
-                                        <Icons.PieChartIcon className="w-4 h-4 text-indigo-500" />
-                                        업종별 {salesViewMode === 'amount' ? '매출' : '건수'} 비중 (클릭하여 필터링)
-                                    </h4>
-                                    {selectedSeoulIndustry && (
-                                        <button 
-                                            onClick={() => setSelectedSeoulIndustry(null)}
-                                            className="text-xs bg-white border border-gray-300 px-2 py-1 rounded text-gray-600 hover:text-indigo-600 hover:border-indigo-300 transition"
-                                        >
-                                            필터 초기화
-                                        </button>
-                                    )}
-                                </div>
-                                <div className="flex flex-col md:flex-row h-64">
-                                    <div className="flex-1 min-h-[250px]">
+                        {/* Top Section: Industry Pie Chart AND Day of Week Analysis (Combined) */}
+                        <div className="flex flex-col lg:flex-row gap-6 mb-6">
+                            
+                            {/* Left: Industry Distribution (Pie Chart) */}
+                            {seoulSales.byIndustry && seoulSales.byIndustry.length > 0 && (
+                                <div className="w-full lg:w-1/2 p-4 bg-gray-50 rounded-xl border border-gray-200">
+                                    <div className="flex justify-between items-center mb-4">
+                                        <h4 className="font-bold text-gray-700 text-sm flex items-center gap-2">
+                                            <Icons.PieChartIcon className="w-4 h-4 text-indigo-500" />
+                                            업종별 {salesViewMode === 'amount' ? '매출' : '건수'} 비중
+                                        </h4>
+                                        {selectedSeoulIndustry && (
+                                            <button 
+                                                onClick={() => setSelectedSeoulIndustry(null)}
+                                                className="text-xs bg-white border border-gray-300 px-2 py-1 rounded text-gray-600 hover:text-indigo-600 hover:border-indigo-300 transition"
+                                            >
+                                                필터 초기화
+                                            </button>
+                                        )}
+                                    </div>
+                                    <div className="h-[300px]">
                                         <ResponsiveContainer width="100%" height="100%">
                                             <PieChart>
                                                 <Pie
@@ -667,10 +670,14 @@ const App: React.FC = () => {
                                                     nameKey="name"
                                                     cx="50%"
                                                     cy="50%"
-                                                    outerRadius={80}
+                                                    outerRadius={90}
                                                     innerRadius={50}
                                                     onClick={(data) => setSelectedSeoulIndustry(prev => prev === data.name ? null : data.name)}
                                                     cursor="pointer"
+                                                    paddingAngle={2}
+                                                    label={({ name, percent, value }) => 
+                                                       `${name} ${(percent * 100).toFixed(0)}%`
+                                                    }
                                                 >
                                                     {seoulIndustryPieData.map((entry, index) => (
                                                         <Cell 
@@ -693,20 +700,59 @@ const App: React.FC = () => {
                                                     layout="vertical" 
                                                     verticalAlign="middle" 
                                                     align="right"
-                                                    wrapperStyle={{ fontSize: '11px', lineHeight: '20px' }}
+                                                    wrapperStyle={{ fontSize: '11px', lineHeight: '20px', paddingLeft: '20px' }}
+                                                    onClick={(e) => setSelectedSeoulIndustry(prev => prev === e.value ? null : e.value)}
+                                                    cursor="pointer"
+                                                    iconType="circle"
                                                 />
                                             </PieChart>
                                         </ResponsiveContainer>
                                     </div>
-                                    <div className="md:w-1/3 flex flex-col justify-center gap-2 text-xs text-gray-600 pl-0 md:pl-4 mt-4 md:mt-0 border-t md:border-t-0 md:border-l pt-4 md:pt-0">
-                                        <p className="font-bold mb-2 text-gray-800">💡 차트 사용법</p>
-                                        <p>• 원형 그래프의 조각을 클릭하면 아래의 상세 분석(요일, 시간, 성별 등) 데이터가 <strong>해당 업종 기준으로 변경</strong>됩니다.</p>
-                                        <p>• 다시 클릭하거나 '필터 초기화' 버튼을 누르면 전체 합계 기준으로 돌아옵니다.</p>
-                                        <p>• 상위 10개 업종만 표시됩니다.</p>
+                                    <div className="text-center mt-2 text-xs text-gray-500">
+                                        * 범례 또는 차트를 클릭하여 해당 업종으로 필터링할 수 있습니다.
+                                    </div>
+                                </div>
+                            )}
+
+                            {/* Right: Day of Week Analysis (Moved Here) */}
+                            <div className="w-full lg:w-1/2 bg-white border rounded-xl p-4">
+                                <h4 className="font-bold text-gray-700 mb-3 text-sm">요일별 {salesViewMode === 'amount' ? '매출' : '건수'} 분석</h4>
+                                <div className="flex flex-col gap-3 h-full justify-center">
+                                    {/* Peak Day */}
+                                    <div className="bg-gray-50 p-3 rounded-lg flex justify-between items-center mb-4">
+                                        <span className="text-xs text-gray-500 font-bold">가장 높은 요일</span>
+                                        {(() => {
+                                            const source = salesViewMode === 'amount' ? currentSeoulData.dayAmount : currentSeoulData.dayCount;
+                                            const keys = Object.keys(source);
+                                            if (keys.length === 0) return <span>-</span>;
+                                            const peakDay = keys.reduce((a, b) => source[a] > source[b] ? a : b);
+                                            const mapDay: any = { MON:'월', TUE:'화', WED:'수', THU:'목', FRI:'금', SAT:'토', SUN:'일' };
+                                            return <span className="text-lg font-black text-indigo-600">{mapDay[peakDay]}요일</span>;
+                                        })()}
+                                    </div>
+                                    {/* List */}
+                                    <div className="grid grid-cols-7 gap-1 text-center h-[180px]">
+                                        {['MON','TUE','WED','THU','FRI','SAT','SUN'].map((d) => {
+                                            const mapDay: any = { MON:'월', TUE:'화', WED:'수', THU:'목', FRI:'금', SAT:'토', SUN:'일' };
+                                            const val = salesViewMode === 'amount' ? currentSeoulData.dayAmount[d] : currentSeoulData.dayCount[d];
+                                            // Simple bar height calc
+                                            const maxVal = Math.max(...Object.values(salesViewMode === 'amount' ? currentSeoulData.dayAmount : currentSeoulData.dayCount)) || 1;
+                                            const percent = (val / maxVal) * 100;
+
+                                            return (
+                                                <div key={d} className="flex flex-col items-center gap-1 h-full justify-end">
+                                                    <div className="w-full bg-gray-100 rounded-t-sm relative h-full flex items-end justify-center">
+                                                        <div className="w-full bg-indigo-400 rounded-t-sm opacity-80 transition-all duration-500" style={{ height: `${percent}%` }}></div>
+                                                    </div>
+                                                    <span className="text-xs font-bold text-gray-600">{mapDay[d]}</span>
+                                                    <span className="text-[10px] text-gray-400 scale-90">{val > 1000000 ? (val/10000).toFixed(0)+'만' : val.toLocaleString()}</span>
+                                                </div>
+                                            )
+                                        })}
                                     </div>
                                 </div>
                             </div>
-                        )}
+                        </div>
 
                         {/* Summary Numbers */}
                         <div className="bg-indigo-50 rounded-xl p-4 mb-6 text-center transition-colors duration-300" style={selectedSeoulIndustry ? {backgroundColor: '#eff6ff'} : {}}>
@@ -721,7 +767,7 @@ const App: React.FC = () => {
                             </p>
                         </div>
 
-                        <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                        <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
                             {/* 1. Weekday vs Weekend */}
                             <div className="bg-white border rounded-xl p-4">
                                 <h4 className="font-bold text-gray-700 mb-4 flex items-center gap-2 text-sm">주중 / 주말 비율</h4>
@@ -750,9 +796,18 @@ const App: React.FC = () => {
                                         </div>
                                     </div>
                                 </div>
-                                <div className="flex justify-around text-xs mt-2 text-gray-600">
-                                    <div className="flex items-center gap-1"><div className="w-2 h-2 rounded-full bg-indigo-500"></div>주중: {(salesViewMode === 'amount' ? currentSeoulData.weekdayAmount : currentSeoulData.weekdayCount).toLocaleString()}</div>
-                                    <div className="flex items-center gap-1"><div className="w-2 h-2 rounded-full bg-rose-500"></div>주말: {(salesViewMode === 'amount' ? currentSeoulData.weekendAmount : currentSeoulData.weekendCount).toLocaleString()}</div>
+                                <div className="flex flex-col gap-1 text-xs mt-2 text-gray-600">
+                                    {(() => {
+                                        const wd = salesViewMode === 'amount' ? currentSeoulData.weekdayAmount : currentSeoulData.weekdayCount;
+                                        const we = salesViewMode === 'amount' ? currentSeoulData.weekendAmount : currentSeoulData.weekendCount;
+                                        const total = wd + we || 1;
+                                        return (
+                                            <>
+                                                <div className="flex justify-between items-center"><span className="flex items-center gap-1"><div className="w-2 h-2 rounded-full bg-indigo-500"></div>주중</span> <span>{wd.toLocaleString()} ({((wd/total)*100).toFixed(1)}%)</span></div>
+                                                <div className="flex justify-between items-center"><span className="flex items-center gap-1"><div className="w-2 h-2 rounded-full bg-rose-500"></div>주말</span> <span>{we.toLocaleString()} ({((we/total)*100).toFixed(1)}%)</span></div>
+                                            </>
+                                        );
+                                    })()}
                                 </div>
                             </div>
 
@@ -776,65 +831,26 @@ const App: React.FC = () => {
                                         </PieChart>
                                     </ResponsiveContainer>
                                 </div>
-                                <div className="flex justify-around text-xs mt-2 text-gray-600">
-                                    <div className="flex items-center gap-1"><div className="w-2 h-2 rounded-full bg-blue-500"></div>남성: {(salesViewMode === 'amount' ? currentSeoulData.genderAmount.male : currentSeoulData.genderCount.male).toLocaleString()}</div>
-                                    <div className="flex items-center gap-1"><div className="w-2 h-2 rounded-full bg-pink-500"></div>여성: {(salesViewMode === 'amount' ? currentSeoulData.genderAmount.female : currentSeoulData.genderCount.female).toLocaleString()}</div>
+                                <div className="flex flex-col gap-1 text-xs mt-2 text-gray-600">
+                                    {(() => {
+                                        const m = salesViewMode === 'amount' ? currentSeoulData.genderAmount.male : currentSeoulData.genderCount.male;
+                                        const f = salesViewMode === 'amount' ? currentSeoulData.genderAmount.female : currentSeoulData.genderCount.female;
+                                        const total = m + f || 1;
+                                        return (
+                                            <>
+                                                <div className="flex justify-between items-center"><span className="flex items-center gap-1"><div className="w-2 h-2 rounded-full bg-blue-500"></div>남성</span> <span>{m.toLocaleString()} ({((m/total)*100).toFixed(1)}%)</span></div>
+                                                <div className="flex justify-between items-center"><span className="flex items-center gap-1"><div className="w-2 h-2 rounded-full bg-pink-500"></div>여성</span> <span>{f.toLocaleString()} ({((f/total)*100).toFixed(1)}%)</span></div>
+                                            </>
+                                        );
+                                    })()}
                                 </div>
                             </div>
 
-                            {/* 3. Day of Week Analysis */}
-                            <div className="bg-white border rounded-xl p-4 md:col-span-2">
-                                <h4 className="font-bold text-gray-700 mb-3 text-sm">요일별 {salesViewMode === 'amount' ? '매출' : '건수'} 분석</h4>
-                                <div className="flex flex-col gap-3">
-                                    {/* Peak Day */}
-                                    <div className="bg-gray-50 p-3 rounded-lg flex justify-between items-center">
-                                        <span className="text-xs text-gray-500 font-bold">가장 높은 요일</span>
-                                        {(() => {
-                                            const source = salesViewMode === 'amount' ? currentSeoulData.dayAmount : currentSeoulData.dayCount;
-                                            const keys = Object.keys(source);
-                                            if (keys.length === 0) return <span>-</span>;
-                                            const peakDay = keys.reduce((a, b) => source[a] > source[b] ? a : b);
-                                            const mapDay: any = { MON:'월', TUE:'화', WED:'수', THU:'목', FRI:'금', SAT:'토', SUN:'일' };
-                                            return <span className="text-lg font-black text-indigo-600">{mapDay[peakDay]}요일</span>;
-                                        })()}
-                                    </div>
-                                    {/* List */}
-                                    <div className="grid grid-cols-7 gap-1 text-center">
-                                        {['MON','TUE','WED','THU','FRI','SAT','SUN'].map((d) => {
-                                            const mapDay: any = { MON:'월', TUE:'화', WED:'수', THU:'목', FRI:'금', SAT:'토', SUN:'일' };
-                                            const val = salesViewMode === 'amount' ? currentSeoulData.dayAmount[d] : currentSeoulData.dayCount[d];
-                                            // Simple bar height calc
-                                            const maxVal = Math.max(...Object.values(salesViewMode === 'amount' ? currentSeoulData.dayAmount : currentSeoulData.dayCount)) || 1;
-                                            const percent = (val / maxVal) * 100;
-
-                                            return (
-                                                <div key={d} className="flex flex-col items-center gap-1">
-                                                    <div className="w-full bg-gray-100 rounded-t-sm relative h-20 flex items-end justify-center">
-                                                        <div className="w-full bg-indigo-400 rounded-t-sm opacity-80" style={{ height: `${percent}%` }}></div>
-                                                    </div>
-                                                    <span className="text-xs font-bold text-gray-600">{mapDay[d]}</span>
-                                                    <span className="text-[10px] text-gray-400 scale-90">{val > 1000000 ? (val/10000).toFixed(0)+'만' : val.toLocaleString()}</span>
-                                                </div>
-                                            )
-                                        })}
-                                    </div>
-                                </div>
-                            </div>
-
-                            {/* 4. Time Slot Analysis */}
-                            <div className="bg-white border rounded-xl p-4">
-                                <h4 className="font-bold text-gray-700 mb-3 text-sm">시간대별 분석</h4>
-                                <div className="space-y-3">
-                                    <div className="bg-gray-50 p-3 rounded-lg flex justify-between items-center">
-                                        <span className="text-xs text-gray-500 font-bold">피크 타임</span>
-                                        {(() => {
-                                            const source = salesViewMode === 'amount' ? currentSeoulData.timeAmount : currentSeoulData.timeCount;
-                                            const keys = Object.keys(source);
-                                            if(keys.length === 0) return <span>-</span>;
-                                            const peak = keys.reduce((a, b) => source[a] > source[b] ? a : b);
-                                            return <span className="text-lg font-black text-indigo-600">{peak.replace('_', '~')}시</span>;
-                                        })()}
-                                    </div>
+                            {/* 3. Time Slot Analysis & Age (Stacked) */}
+                            <div className="flex flex-col gap-4">
+                                {/* Time Slot */}
+                                <div className="bg-white border rounded-xl p-4 flex-1">
+                                    <h4 className="font-bold text-gray-700 mb-3 text-sm">시간대별 분석</h4>
                                     <div className="text-xs space-y-2">
                                         {Object.keys(currentSeoulData.timeAmount).map(t => {
                                             const val = salesViewMode === 'amount' ? currentSeoulData.timeAmount[t] : currentSeoulData.timeCount[t];
@@ -845,28 +861,16 @@ const App: React.FC = () => {
                                                     <div className="flex-1 h-2 bg-gray-100 rounded-full overflow-hidden">
                                                         <div className="h-full bg-green-400" style={{ width: `${(val/maxVal)*100}%` }}></div>
                                                     </div>
-                                                    <span className="w-12 text-right text-gray-700 font-medium">{val > 100000 ? (val/10000).toFixed(0)+'만' : val.toLocaleString()}</span>
+                                                    <span className="w-16 text-right text-gray-700 font-medium">{val > 100000 ? (val/10000).toFixed(0)+'만' : val.toLocaleString()}</span>
                                                 </div>
                                             )
                                         })}
                                     </div>
                                 </div>
-                            </div>
 
-                            {/* 5. Age Analysis */}
-                            <div className="bg-white border rounded-xl p-4">
-                                <h4 className="font-bold text-gray-700 mb-3 text-sm">연령대별 분석</h4>
-                                <div className="space-y-3">
-                                    <div className="bg-gray-50 p-3 rounded-lg flex justify-between items-center">
-                                        <span className="text-xs text-gray-500 font-bold">주요 고객 연령</span>
-                                        {(() => {
-                                            const source = salesViewMode === 'amount' ? currentSeoulData.ageAmount : currentSeoulData.ageCount;
-                                            const keys = Object.keys(source);
-                                            if(keys.length === 0) return <span>-</span>;
-                                            const peak = keys.reduce((a, b) => source[a] > source[b] ? a : b);
-                                            return <span className="text-lg font-black text-indigo-600">{peak}대</span>;
-                                        })()}
-                                    </div>
+                                {/* Age Analysis */}
+                                <div className="bg-white border rounded-xl p-4 flex-1">
+                                    <h4 className="font-bold text-gray-700 mb-3 text-sm">연령대별 분석</h4>
                                     <div className="text-xs space-y-2">
                                         {Object.keys(currentSeoulData.ageAmount).map(a => {
                                             const val = salesViewMode === 'amount' ? currentSeoulData.ageAmount[a] : currentSeoulData.ageCount[a];
@@ -877,7 +881,7 @@ const App: React.FC = () => {
                                                     <div className="flex-1 h-2 bg-gray-100 rounded-full overflow-hidden">
                                                         <div className="h-full bg-orange-400" style={{ width: `${(val/maxVal)*100}%` }}></div>
                                                     </div>
-                                                    <span className="w-12 text-right text-gray-700 font-medium">{val > 100000 ? (val/10000).toFixed(0)+'만' : val.toLocaleString()}</span>
+                                                    <span className="w-16 text-right text-gray-700 font-medium">{val > 100000 ? (val/10000).toFixed(0)+'만' : val.toLocaleString()}</span>
                                                 </div>
                                             )
                                         })}
