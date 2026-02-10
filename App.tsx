@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useMemo } from 'react';
-import { PieChart, Pie, Cell, BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer, Sector, Legend, CartesianGrid } from 'recharts';
+import { PieChart, Pie, Cell, BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer, Sector, Legend, CartesianGrid, LabelList } from 'recharts';
 import * as Icons from './components/Icons';
 import TradeMap from './components/Map';
 import GoogleAd from './components/GoogleAd';
@@ -132,6 +132,10 @@ const App: React.FC = () => {
 
   // Sales Tab State
   const [salesViewMode, setSalesViewMode] = useState<'amount' | 'count'>('amount');
+
+  // Chart Hover States
+  const [focusedTimeIndex, setFocusedTimeIndex] = useState<number | null>(null);
+  const [focusedAgeIndex, setFocusedAgeIndex] = useState<number | null>(null);
 
   const handleGeocode = async () => {
     if (!address) { setError("주소를 입력해주세요."); return; }
@@ -375,13 +379,17 @@ const App: React.FC = () => {
   const timeChartData = useMemo(() => {
     if (!currentSeoulData) return [];
     const source = salesViewMode === 'amount' ? currentSeoulData.timeAmount : currentSeoulData.timeCount;
+    
+    // Calculate total for percentage
+    const total = Object.values(source).reduce((acc, curr) => acc + curr, 0) || 1;
+
     return [
-        { name: '00-06시', key: '00_06', value: source['00_06'] },
-        { name: '06-11시', key: '06_11', value: source['06_11'] },
-        { name: '11-14시', key: '11_14', value: source['11_14'] },
-        { name: '14-17시', key: '14_17', value: source['14_17'] },
-        { name: '17-21시', key: '17_21', value: source['17_21'] },
-        { name: '21-24시', key: '21_24', value: source['21_24'] },
+        { name: '00-06시', key: '00_06', value: source['00_06'], percentStr: `${((source['00_06'] / total) * 100).toFixed(1)}%` },
+        { name: '06-11시', key: '06_11', value: source['06_11'], percentStr: `${((source['06_11'] / total) * 100).toFixed(1)}%` },
+        { name: '11-14시', key: '11_14', value: source['11_14'], percentStr: `${((source['11_14'] / total) * 100).toFixed(1)}%` },
+        { name: '14-17시', key: '14_17', value: source['14_17'], percentStr: `${((source['14_17'] / total) * 100).toFixed(1)}%` },
+        { name: '17-21시', key: '17_21', value: source['17_21'], percentStr: `${((source['17_21'] / total) * 100).toFixed(1)}%` },
+        { name: '21-24시', key: '21_24', value: source['21_24'], percentStr: `${((source['21_24'] / total) * 100).toFixed(1)}%` },
     ];
   }, [currentSeoulData, salesViewMode]);
 
@@ -389,13 +397,17 @@ const App: React.FC = () => {
   const ageChartData = useMemo(() => {
     if (!currentSeoulData) return [];
     const source = salesViewMode === 'amount' ? currentSeoulData.ageAmount : currentSeoulData.ageCount;
+    
+    // Calculate total for percentage
+    const total = Object.values(source).reduce((acc, curr) => acc + curr, 0) || 1;
+
     return [
-        { name: '10대', value: source['10'] },
-        { name: '20대', value: source['20'] },
-        { name: '30대', value: source['30'] },
-        { name: '40대', value: source['40'] },
-        { name: '50대', value: source['50'] },
-        { name: '60대+', value: source['60'] },
+        { name: '10대', value: source['10'], percentStr: `${((source['10'] / total) * 100).toFixed(1)}%` },
+        { name: '20대', value: source['20'], percentStr: `${((source['20'] / total) * 100).toFixed(1)}%` },
+        { name: '30대', value: source['30'], percentStr: `${((source['30'] / total) * 100).toFixed(1)}%` },
+        { name: '40대', value: source['40'], percentStr: `${((source['40'] / total) * 100).toFixed(1)}%` },
+        { name: '50대', value: source['50'], percentStr: `${((source['50'] / total) * 100).toFixed(1)}%` },
+        { name: '60대+', value: source['60'], percentStr: `${((source['60'] / total) * 100).toFixed(1)}%` },
     ];
   }, [currentSeoulData, salesViewMode]);
 
@@ -405,9 +417,11 @@ const App: React.FC = () => {
     const isAmount = salesViewMode === 'amount';
     const wd = isAmount ? currentSeoulData.weekdayAmount : currentSeoulData.weekdayCount;
     const we = isAmount ? currentSeoulData.weekendAmount : currentSeoulData.weekendCount;
+    const total = wd + we || 1;
+
     return [
-        { name: '주중', value: wd, color: '#3b82f6' }, // Blue
-        { name: '주말', value: we, color: '#ef4444' } // Red
+        { name: '주중', value: wd, color: '#3b82f6', percent: ((wd / total) * 100).toFixed(1) }, 
+        { name: '주말', value: we, color: '#ef4444', percent: ((we / total) * 100).toFixed(1) } 
     ];
   }, [currentSeoulData, salesViewMode]);
 
@@ -750,7 +764,7 @@ const App: React.FC = () => {
                                                     ))}
                                                 </Pie>
                                                 <Tooltip formatter={(value: number) => salesViewMode === 'amount' ? `${formatSalesValue(value, 'amount')}억원` : `${value.toLocaleString()}건`} />
-                                                <Legend />
+                                                <Legend formatter={(value, entry: any) => `${value} (${entry.payload.percent}%)`}/>
                                             </PieChart>
                                         </ResponsiveContainer>
                                     </div>
@@ -799,13 +813,31 @@ const App: React.FC = () => {
                                 <h4 className="font-bold text-gray-700 mb-3 text-sm">시간대별 {salesViewMode === 'amount' ? '매출' : '건수'} 분석</h4>
                                 <div className="h-64">
                                     <ResponsiveContainer width="100%" height="100%">
-                                        <BarChart data={timeChartData} margin={{top: 5, right: 30, left: 20, bottom: 5}}>
+                                        <BarChart 
+                                            data={timeChartData} 
+                                            margin={{top: 20, right: 30, left: 20, bottom: 5}}
+                                            onMouseMove={(state) => {
+                                                if (state.activeTooltipIndex !== undefined) {
+                                                    setFocusedTimeIndex(Number(state.activeTooltipIndex));
+                                                } else {
+                                                    setFocusedTimeIndex(null);
+                                                }
+                                            }}
+                                            onMouseLeave={() => setFocusedTimeIndex(null)}
+                                        >
                                             <CartesianGrid strokeDasharray="3 3" vertical={false} />
                                             <XAxis dataKey="name" tick={{fontSize: 11}} />
                                             <YAxis hide />
                                             <Tooltip formatter={(value: number) => salesViewMode === 'amount' ? `${formatSalesValue(value, 'amount')}억원` : `${value.toLocaleString()}건`} />
-                                            {/* Changed to Single Green Color */}
-                                            <Bar dataKey="value" fill="#10b981" radius={[4, 4, 0, 0]} />
+                                            <Bar dataKey="value" radius={[4, 4, 0, 0]}>
+                                                {timeChartData.map((entry, index) => (
+                                                    <Cell 
+                                                        key={`cell-${index}`} 
+                                                        fill={focusedTimeIndex === index ? '#10b981' : '#86efac'} 
+                                                    />
+                                                ))}
+                                                <LabelList dataKey="percentStr" position="insideTop" style={{ fill: 'white', fontWeight: 'bold', fontSize: '11px' }} />
+                                            </Bar>
                                         </BarChart>
                                     </ResponsiveContainer>
                                 </div>
@@ -821,10 +853,12 @@ const App: React.FC = () => {
                                     </h4>
                                     <div className="h-4 flex rounded-full overflow-hidden mb-1">
                                         {genderChartData.map((d, i) => (
-                                            <div key={i} style={{width: `${d.percent}%`, backgroundColor: d.color}} className="h-full relative group">
-                                                <div className="absolute inset-0 flex items-center justify-center text-[10px] text-white font-bold opacity-0 group-hover:opacity-100 transition-opacity">
-                                                    {d.percent.toFixed(1)}%
-                                                </div>
+                                            <div key={i} style={{width: `${d.percent}%`, backgroundColor: d.color}} className="h-full relative flex items-center justify-center">
+                                                {d.percent > 5 && (
+                                                    <span className="text-[10px] text-white font-bold drop-shadow-md">
+                                                        {d.percent.toFixed(1)}%
+                                                    </span>
+                                                )}
                                             </div>
                                         ))}
                                     </div>
@@ -839,12 +873,30 @@ const App: React.FC = () => {
                                     <h4 className="font-bold text-gray-700 mb-2 text-sm">연령대별 분포</h4>
                                     <div className="h-40">
                                         <ResponsiveContainer width="100%" height="100%">
-                                            <BarChart data={ageChartData} margin={{top: 0, right: 0, left: 0, bottom: 0}}>
+                                            <BarChart 
+                                                data={ageChartData} 
+                                                margin={{top: 20, right: 0, left: 0, bottom: 0}}
+                                                onMouseMove={(state) => {
+                                                    if (state.activeTooltipIndex !== undefined) {
+                                                        setFocusedAgeIndex(Number(state.activeTooltipIndex));
+                                                    } else {
+                                                        setFocusedAgeIndex(null);
+                                                    }
+                                                }}
+                                                onMouseLeave={() => setFocusedAgeIndex(null)}
+                                            >
                                                 <CartesianGrid strokeDasharray="3 3" vertical={false} />
                                                 <XAxis dataKey="name" tick={{fontSize: 11}} />
                                                 <Tooltip formatter={(value: number) => salesViewMode === 'amount' ? `${formatSalesValue(value, 'amount')}억원` : `${value.toLocaleString()}건`} cursor={{fill: 'transparent'}} />
-                                                {/* Changed to Single Orange Color */}
-                                                <Bar dataKey="value" fill="#f97316" radius={[4, 4, 0, 0]} />
+                                                <Bar dataKey="value" radius={[4, 4, 0, 0]}>
+                                                    {ageChartData.map((entry, index) => (
+                                                        <Cell 
+                                                            key={`cell-${index}`} 
+                                                            fill={focusedAgeIndex === index ? '#f97316' : '#fdba74'} 
+                                                        />
+                                                    ))}
+                                                    <LabelList dataKey="percentStr" position="insideTop" style={{ fill: 'white', fontWeight: 'bold', fontSize: '11px' }} />
+                                                </Bar>
                                             </BarChart>
                                         </ResponsiveContainer>
                                     </div>
