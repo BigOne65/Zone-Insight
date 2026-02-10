@@ -399,6 +399,18 @@ const App: React.FC = () => {
     ];
   }, [currentSeoulData, salesViewMode]);
 
+  // Prep Data for Weekday/Weekend Chart
+  const weekdayChartData = useMemo(() => {
+    if (!currentSeoulData) return [];
+    const isAmount = salesViewMode === 'amount';
+    const wd = isAmount ? currentSeoulData.weekdayAmount : currentSeoulData.weekdayCount;
+    const we = isAmount ? currentSeoulData.weekendAmount : currentSeoulData.weekendCount;
+    return [
+        { name: '주중', value: wd, color: '#3b82f6' }, // Blue
+        { name: '주말', value: we, color: '#ef4444' } // Red
+    ];
+  }, [currentSeoulData, salesViewMode]);
+
   // Prep Data for Gender Chart
   const genderChartData = useMemo(() => {
     if (!currentSeoulData) return [];
@@ -716,36 +728,65 @@ const App: React.FC = () => {
                                 </div>
                             )}
 
-                            {/* Right: Day of Week Analysis */}
-                            <div className="w-full lg:w-1/2 bg-white border rounded-xl p-4">
-                                <h4 className="font-bold text-gray-700 mb-3 text-sm">요일별 {salesViewMode === 'amount' ? '매출' : '건수'} 분석</h4>
-                                <div className="flex flex-col gap-3 h-full justify-center">
-                                    <div className="bg-gray-50 p-3 rounded-lg flex justify-between items-center mb-4">
-                                        <span className="text-xs text-gray-500 font-bold">가장 높은 요일</span>
-                                        {(() => {
-                                            const source = salesViewMode === 'amount' ? currentSeoulData.dayAmount : currentSeoulData.dayCount;
-                                            const keys = Object.keys(source);
-                                            if (keys.length === 0) return <span>-</span>;
-                                            const peakDay = keys.reduce((a, b) => source[a] > source[b] ? a : b);
-                                            const mapDay: any = { MON:'월', TUE:'화', WED:'수', THU:'목', FRI:'금', SAT:'토', SUN:'일' };
-                                            return <span className="text-lg font-black text-indigo-600">{mapDay[peakDay]}요일</span>;
-                                        })()}
+                            {/* Right: Weekday/Weekend AND Day of Week Analysis */}
+                            <div className="w-full lg:w-1/2 flex flex-col gap-4">
+                                {/* Top: Weekday/Weekend Analysis (RESTORED) */}
+                                <div className="bg-white border rounded-xl p-4 flex-1">
+                                    <h4 className="font-bold text-gray-700 mb-3 text-sm">주중/주말 매출 비중</h4>
+                                    <div className="h-40 flex items-center justify-center">
+                                        <ResponsiveContainer width="100%" height="100%">
+                                            <PieChart>
+                                                <Pie
+                                                    data={weekdayChartData}
+                                                    cx="50%"
+                                                    cy="50%"
+                                                    innerRadius={30}
+                                                    outerRadius={60}
+                                                    paddingAngle={5}
+                                                    dataKey="value"
+                                                >
+                                                    {weekdayChartData.map((entry, index) => (
+                                                        <Cell key={`cell-${index}`} fill={entry.color} />
+                                                    ))}
+                                                </Pie>
+                                                <Tooltip formatter={(value: number) => salesViewMode === 'amount' ? `${formatSalesValue(value, 'amount')}억원` : `${value.toLocaleString()}건`} />
+                                                <Legend />
+                                            </PieChart>
+                                        </ResponsiveContainer>
                                     </div>
-                                    <div className="grid grid-cols-7 gap-1 text-center h-[180px]">
-                                        {['MON','TUE','WED','THU','FRI','SAT','SUN'].map((d) => {
-                                            const mapDay: any = { MON:'월', TUE:'화', WED:'수', THU:'목', FRI:'금', SAT:'토', SUN:'일' };
-                                            const val = salesViewMode === 'amount' ? currentSeoulData.dayAmount[d] : currentSeoulData.dayCount[d];
-                                            const maxVal = Math.max(...Object.values(salesViewMode === 'amount' ? currentSeoulData.dayAmount : currentSeoulData.dayCount)) || 1;
-                                            const percent = (val / maxVal) * 100;
-                                            return (
-                                                <div key={d} className="flex flex-col items-center gap-1 h-full justify-end group">
-                                                    <div className="w-full bg-gray-100 rounded-t-sm relative h-full flex items-end justify-center">
-                                                        <div className="w-full bg-indigo-400 rounded-t-sm opacity-80 transition-all duration-500 group-hover:opacity-100" style={{ height: `${percent}%` }}></div>
+                                </div>
+
+                                {/* Bottom: Day of Week Analysis */}
+                                <div className="bg-white border rounded-xl p-4 flex-1">
+                                    <h4 className="font-bold text-gray-700 mb-3 text-sm">요일별 {salesViewMode === 'amount' ? '매출' : '건수'} 분석</h4>
+                                    <div className="flex flex-col gap-3 h-full justify-center">
+                                        <div className="bg-gray-50 p-3 rounded-lg flex justify-between items-center mb-4">
+                                            <span className="text-xs text-gray-500 font-bold">가장 높은 요일</span>
+                                            {(() => {
+                                                const source = salesViewMode === 'amount' ? currentSeoulData.dayAmount : currentSeoulData.dayCount;
+                                                const keys = Object.keys(source);
+                                                if (keys.length === 0) return <span>-</span>;
+                                                const peakDay = keys.reduce((a, b) => source[a] > source[b] ? a : b);
+                                                const mapDay: any = { MON:'월', TUE:'화', WED:'수', THU:'목', FRI:'금', SAT:'토', SUN:'일' };
+                                                return <span className="text-lg font-black text-indigo-600">{mapDay[peakDay]}요일</span>;
+                                            })()}
+                                        </div>
+                                        <div className="grid grid-cols-7 gap-1 text-center h-[140px]">
+                                            {['MON','TUE','WED','THU','FRI','SAT','SUN'].map((d) => {
+                                                const mapDay: any = { MON:'월', TUE:'화', WED:'수', THU:'목', FRI:'금', SAT:'토', SUN:'일' };
+                                                const val = salesViewMode === 'amount' ? currentSeoulData.dayAmount[d] : currentSeoulData.dayCount[d];
+                                                const maxVal = Math.max(...Object.values(salesViewMode === 'amount' ? currentSeoulData.dayAmount : currentSeoulData.dayCount)) || 1;
+                                                const percent = (val / maxVal) * 100;
+                                                return (
+                                                    <div key={d} className="flex flex-col items-center gap-1 h-full justify-end group">
+                                                        <div className="w-full bg-gray-100 rounded-t-sm relative h-full flex items-end justify-center">
+                                                            <div className="w-full bg-indigo-400 rounded-t-sm opacity-80 transition-all duration-500 group-hover:opacity-100" style={{ height: `${percent}%` }}></div>
+                                                        </div>
+                                                        <span className="text-xs font-bold text-gray-600">{mapDay[d]}</span>
                                                     </div>
-                                                    <span className="text-xs font-bold text-gray-600">{mapDay[d]}</span>
-                                                </div>
-                                            )
-                                        })}
+                                                )
+                                            })}
+                                        </div>
                                     </div>
                                 </div>
                             </div>
@@ -763,11 +804,8 @@ const App: React.FC = () => {
                                             <XAxis dataKey="name" tick={{fontSize: 11}} />
                                             <YAxis hide />
                                             <Tooltip formatter={(value: number) => salesViewMode === 'amount' ? `${formatSalesValue(value, 'amount')}억원` : `${value.toLocaleString()}건`} />
-                                            <Bar dataKey="value" fill="#8884d8" radius={[4, 4, 0, 0]}>
-                                                {timeChartData.map((entry, index) => (
-                                                    <Cell key={`cell-${index}`} fill={COLORS[index % COLORS.length]} />
-                                                ))}
-                                            </Bar>
+                                            {/* Changed to Single Green Color */}
+                                            <Bar dataKey="value" fill="#10b981" radius={[4, 4, 0, 0]} />
                                         </BarChart>
                                     </ResponsiveContainer>
                                 </div>
@@ -805,11 +843,8 @@ const App: React.FC = () => {
                                                 <CartesianGrid strokeDasharray="3 3" vertical={false} />
                                                 <XAxis dataKey="name" tick={{fontSize: 11}} />
                                                 <Tooltip formatter={(value: number) => salesViewMode === 'amount' ? `${formatSalesValue(value, 'amount')}억원` : `${value.toLocaleString()}건`} cursor={{fill: 'transparent'}} />
-                                                <Bar dataKey="value" fill="#82ca9d" radius={[4, 4, 0, 0]}>
-                                                    {ageChartData.map((entry, index) => (
-                                                        <Cell key={`cell-${index}`} fill={COLORS[(index + 2) % COLORS.length]} />
-                                                    ))}
-                                                </Bar>
+                                                {/* Changed to Single Orange Color */}
+                                                <Bar dataKey="value" fill="#f97316" radius={[4, 4, 0, 0]} />
                                             </BarChart>
                                         </ResponsiveContainer>
                                     </div>
