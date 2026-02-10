@@ -353,7 +353,7 @@ const App: React.FC = () => {
         franchiseRate: filtered.length ? ((franchise/filtered.length)*100).toFixed(1) : "0",
         summaryTableData
     });
-    setTopStores(sortedStores.slice(0, 50));
+    setTopStores(sortedStores.slice(0, 100));
   };
 
   useEffect(() => {
@@ -510,7 +510,7 @@ const App: React.FC = () => {
                 <ul className="space-y-3 text-gray-600">
                     <li className="flex gap-3">
                         <span className="flex-shrink-0 w-6 h-6 bg-gray-200 rounded-full flex items-center justify-center font-bold text-xs text-gray-700">1</span>
-                        <span>분석 기준(행정 구역/주요 상권)을 선택하고, 주소를 입력하여 검색합니다.</span>
+                        <span>분석 기준(주요 상권/행정 구역)을 선택하고, 주소를 입력하여 검색합니다.</span>
                     </li>
                     <li className="flex gap-3">
                         <span className="flex-shrink-0 w-6 h-6 bg-gray-200 rounded-full flex items-center justify-center font-bold text-xs text-gray-700">2</span>
@@ -1035,7 +1035,7 @@ const App: React.FC = () => {
                  )}
 
                  {/* Summary Cards */}
-                 <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+                 <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                      <div className="bg-white p-4 md:p-6 rounded-xl shadow-sm border">
                          <h3 className="text-lg font-bold text-gray-800 mb-4 flex items-center gap-2"><Icons.Building className="text-indigo-500"/> 상가 밀집 건물 Top 5</h3>
                          
@@ -1065,30 +1065,33 @@ const App: React.FC = () => {
                             ))}
                          </ul>
                      </div>
-                     <div className="bg-white p-4 md:p-6 rounded-xl shadow-sm border">
-                         <h3 className="text-lg font-bold text-gray-800 mb-4 flex items-center gap-2"><Icons.Layers className="text-orange-500"/> 1층 점포 비율</h3>
-                         <div className="h-40 w-full relative static-chart">
-                            <ResponsiveContainer width="100%" height="100%">
-                                <PieChart>
-                                    <Pie data={storeStats.floorData} cx="50%" cy="50%" innerRadius={40} outerRadius={60} dataKey="value">
-                                        <Cell fill="#f97316"/> <Cell fill="#e2e8f0"/>
-                                    </Pie>
-                                </PieChart>
-                            </ResponsiveContainer>
-                            <div className="absolute inset-0 flex items-center justify-center pointer-events-none pb-4">
-                                <span className="text-xl font-bold text-gray-700">{storeStats.totalStores > 0 ? ((storeStats.floorData[0].value/storeStats.totalStores)*100).toFixed(0) : 0}%</span>
+
+                     <div className="flex flex-col gap-6">
+                        <div className="bg-white p-4 md:p-6 rounded-xl shadow-sm border flex-1">
+                            <h3 className="text-lg font-bold text-gray-800 mb-4 flex items-center gap-2"><Icons.Layers className="text-orange-500"/> 1층 점포 비율</h3>
+                            <div className="h-40 w-full relative static-chart">
+                                <ResponsiveContainer width="100%" height="100%">
+                                    <PieChart>
+                                        <Pie data={storeStats.floorData} cx="50%" cy="50%" innerRadius={40} outerRadius={60} dataKey="value">
+                                            <Cell fill="#f97316"/> <Cell fill="#e2e8f0"/>
+                                        </Pie>
+                                    </PieChart>
+                                </ResponsiveContainer>
+                                <div className="absolute inset-0 flex items-center justify-center pointer-events-none pb-4">
+                                    <span className="text-xl font-bold text-gray-700">{storeStats.totalStores > 0 ? ((storeStats.floorData[0].value/storeStats.totalStores)*100).toFixed(0) : 0}%</span>
+                                </div>
                             </div>
-                         </div>
-                     </div>
-                     <div className="bg-white p-4 md:p-6 rounded-xl shadow-sm border flex flex-col justify-center items-center text-center">
-                         <div className="w-full flex items-center gap-2 mb-2 px-2">
-                            <Icons.Store className="text-green-500 h-5 w-5 flex-shrink-0" />
-                            <h3 className="text-lg font-bold text-gray-800 whitespace-nowrap">프랜차이즈 비율</h3>
-                         </div>
-                         <div className="flex-1 flex flex-col justify-center items-center py-2">
-                             <div className="text-5xl font-extrabold text-green-500 mb-2">{storeStats.franchiseRate}%</div>
-                             <p className="text-sm text-gray-500">전체 점포 중 프랜차이즈형<br/>점포로 추정되는 비율</p>
-                         </div>
+                        </div>
+                        <div className="bg-white p-4 md:p-6 rounded-xl shadow-sm border flex flex-col justify-center items-center text-center flex-1">
+                            <div className="w-full flex items-center gap-2 mb-2 px-2">
+                                <Icons.Store className="text-green-500 h-5 w-5 flex-shrink-0" />
+                                <h3 className="text-lg font-bold text-gray-800 whitespace-nowrap">프랜차이즈 비율</h3>
+                            </div>
+                            <div className="flex-1 flex flex-col justify-center items-center py-2">
+                                <div className="text-5xl font-extrabold text-green-500 mb-2">{storeStats.franchiseRate}%</div>
+                                <p className="text-sm text-gray-500">전체 점포 중 프랜차이즈형<br/>점포로 추정되는 비율</p>
+                            </div>
+                        </div>
                      </div>
                  </div>
 
