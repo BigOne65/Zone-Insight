@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useMemo } from 'react';
-import { PieChart, Pie, Cell, BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer, Sector, Legend } from 'recharts';
+import { PieChart, Pie, Cell, BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer, Sector, Legend, CartesianGrid } from 'recharts';
 import * as Icons from './components/Icons';
 import TradeMap from './components/Map';
 import GoogleAd from './components/GoogleAd';
@@ -371,6 +371,45 @@ const App: React.FC = () => {
           .slice(0, 10);
   }, [seoulSales, salesViewMode]);
 
+  // Prep Data for Time Chart
+  const timeChartData = useMemo(() => {
+    if (!currentSeoulData) return [];
+    const source = salesViewMode === 'amount' ? currentSeoulData.timeAmount : currentSeoulData.timeCount;
+    return [
+        { name: '00-06시', key: '00_06', value: source['00_06'] },
+        { name: '06-11시', key: '06_11', value: source['06_11'] },
+        { name: '11-14시', key: '11_14', value: source['11_14'] },
+        { name: '14-17시', key: '14_17', value: source['14_17'] },
+        { name: '17-21시', key: '17_21', value: source['17_21'] },
+        { name: '21-24시', key: '21_24', value: source['21_24'] },
+    ];
+  }, [currentSeoulData, salesViewMode]);
+
+  // Prep Data for Age Chart
+  const ageChartData = useMemo(() => {
+    if (!currentSeoulData) return [];
+    const source = salesViewMode === 'amount' ? currentSeoulData.ageAmount : currentSeoulData.ageCount;
+    return [
+        { name: '10대', value: source['10'] },
+        { name: '20대', value: source['20'] },
+        { name: '30대', value: source['30'] },
+        { name: '40대', value: source['40'] },
+        { name: '50대', value: source['50'] },
+        { name: '60대+', value: source['60'] },
+    ];
+  }, [currentSeoulData, salesViewMode]);
+
+  // Prep Data for Gender Chart
+  const genderChartData = useMemo(() => {
+    if (!currentSeoulData) return [];
+    const source = salesViewMode === 'amount' ? currentSeoulData.genderAmount : currentSeoulData.genderCount;
+    const total = source.male + source.female;
+    return [
+        { name: '남성', value: source.male, percent: total ? (source.male/total)*100 : 0, color: '#3b82f6' },
+        { name: '여성', value: source.female, percent: total ? (source.female/total)*100 : 0, color: '#ec4899' },
+    ];
+  }, [currentSeoulData, salesViewMode]);
+
   const reset = () => {
       setStep("input"); setAddress(""); setFoundZones([]); setTradeZone(null); 
       setAllRawStores([]); setStoreStats(null); setSbizStats(null); setDataDate(null);
@@ -712,6 +751,72 @@ const App: React.FC = () => {
                             </div>
                         </div>
 
+                        {/* New Section: Time & Demographics */}
+                        <div className="flex flex-col lg:flex-row gap-6 mb-6">
+                            {/* Time Slot Analysis */}
+                            <div className="w-full lg:w-1/2 bg-white border rounded-xl p-4">
+                                <h4 className="font-bold text-gray-700 mb-3 text-sm">시간대별 {salesViewMode === 'amount' ? '매출' : '건수'} 분석</h4>
+                                <div className="h-64">
+                                    <ResponsiveContainer width="100%" height="100%">
+                                        <BarChart data={timeChartData} margin={{top: 5, right: 30, left: 20, bottom: 5}}>
+                                            <CartesianGrid strokeDasharray="3 3" vertical={false} />
+                                            <XAxis dataKey="name" tick={{fontSize: 11}} />
+                                            <YAxis hide />
+                                            <Tooltip formatter={(value: number) => salesViewMode === 'amount' ? `${formatSalesValue(value, 'amount')}억원` : `${value.toLocaleString()}건`} />
+                                            <Bar dataKey="value" fill="#8884d8" radius={[4, 4, 0, 0]}>
+                                                {timeChartData.map((entry, index) => (
+                                                    <Cell key={`cell-${index}`} fill={COLORS[index % COLORS.length]} />
+                                                ))}
+                                            </Bar>
+                                        </BarChart>
+                                    </ResponsiveContainer>
+                                </div>
+                            </div>
+
+                            {/* Demographics Analysis */}
+                            <div className="w-full lg:w-1/2 bg-white border rounded-xl p-4 flex flex-col gap-4">
+                                {/* Gender */}
+                                <div>
+                                    <h4 className="font-bold text-gray-700 mb-2 text-sm flex justify-between">
+                                        <span>성별 분포</span>
+                                        <span className="text-xs font-normal text-gray-500">남성 vs 여성</span>
+                                    </h4>
+                                    <div className="h-4 flex rounded-full overflow-hidden mb-1">
+                                        {genderChartData.map((d, i) => (
+                                            <div key={i} style={{width: `${d.percent}%`, backgroundColor: d.color}} className="h-full relative group">
+                                                <div className="absolute inset-0 flex items-center justify-center text-[10px] text-white font-bold opacity-0 group-hover:opacity-100 transition-opacity">
+                                                    {d.percent.toFixed(1)}%
+                                                </div>
+                                            </div>
+                                        ))}
+                                    </div>
+                                    <div className="flex justify-between text-xs text-gray-600 px-1">
+                                        <span className="flex items-center gap-1"><div className="w-2 h-2 rounded-full bg-blue-500"/>남성 {genderChartData[0].percent.toFixed(1)}%</span>
+                                        <span className="flex items-center gap-1"><div className="w-2 h-2 rounded-full bg-pink-500"/>여성 {genderChartData[1].percent.toFixed(1)}%</span>
+                                    </div>
+                                </div>
+
+                                {/* Age */}
+                                <div className="flex-1">
+                                    <h4 className="font-bold text-gray-700 mb-2 text-sm">연령대별 분포</h4>
+                                    <div className="h-40">
+                                        <ResponsiveContainer width="100%" height="100%">
+                                            <BarChart data={ageChartData} margin={{top: 0, right: 0, left: 0, bottom: 0}}>
+                                                <CartesianGrid strokeDasharray="3 3" vertical={false} />
+                                                <XAxis dataKey="name" tick={{fontSize: 11}} />
+                                                <Tooltip formatter={(value: number) => salesViewMode === 'amount' ? `${formatSalesValue(value, 'amount')}억원` : `${value.toLocaleString()}건`} cursor={{fill: 'transparent'}} />
+                                                <Bar dataKey="value" fill="#82ca9d" radius={[4, 4, 0, 0]}>
+                                                    {ageChartData.map((entry, index) => (
+                                                        <Cell key={`cell-${index}`} fill={COLORS[(index + 2) % COLORS.length]} />
+                                                    ))}
+                                                </Bar>
+                                            </BarChart>
+                                        </ResponsiveContainer>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+
                         {/* Summary Numbers */}
                         <div className="bg-indigo-50 rounded-xl p-4 mb-6 text-center transition-colors duration-300" style={selectedSeoulIndustry ? {backgroundColor: '#eff6ff'} : {}}>
                             <p className="text-indigo-800 text-sm font-bold mb-1">
@@ -725,42 +830,6 @@ const App: React.FC = () => {
                             </p>
                         </div>
                     </div>
-                 )}
-
-                 {/* Sbiz Stats Section (Only for Admin Zone) */}
-                 {tradeZone.type === 'admin' && sbizStats && (
-                     <div className="grid grid-cols-2 md:grid-cols-4 gap-4 animate-fade-in">
-                        {/* 1. Population */}
-                        <div className="bg-white p-4 rounded-xl shadow-sm border border-gray-100 flex flex-col items-center text-center">
-                             <div className="bg-blue-100 p-2 rounded-full mb-2"><Icons.Users className="w-5 h-5 text-blue-600"/></div>
-                             <h4 className="text-sm text-gray-500 font-medium">일 평균 유동인구</h4>
-                             <p className="text-xl md:text-2xl font-bold text-gray-800 mt-1">{sbizStats.population?.total || "-"}</p>
-                        </div>
-                        {/* 2. Max Revenue */}
-                        <div className="bg-white p-4 rounded-xl shadow-sm border border-gray-100 flex flex-col items-center text-center">
-                             <div className="bg-yellow-100 p-2 rounded-full mb-2"><Icons.Wallet className="w-5 h-5 text-yellow-600"/></div>
-                             <h4 className="text-sm text-gray-500 font-medium">매출 1위 업종</h4>
-                             <p className="text-lg md:text-xl font-bold text-gray-800 mt-1 break-keep leading-tight px-1">{sbizStats.maxSales?.type || "-"}</p>
-                        </div>
-                        {/* 3. Delivery */}
-                        <div className="bg-white p-4 rounded-xl shadow-sm border border-gray-100 flex flex-col items-center text-center">
-                             <div className="bg-green-100 p-2 rounded-full mb-2"><Icons.Truck className="w-5 h-5 text-green-600"/></div>
-                             <h4 className="text-sm text-gray-500 font-medium">배달 피크 요일</h4>
-                             <p className="text-xl md:text-2xl font-bold text-gray-800 mt-1">{sbizStats.delivery?.day ? `${sbizStats.delivery.day}요일` : "-"}</p>
-                        </div>
-                        {/* 4. Age Rank */}
-                        <div className="bg-white p-4 rounded-xl shadow-sm border border-gray-100 flex flex-col items-center text-center">
-                             <div className="bg-purple-100 p-2 rounded-full mb-2"><Icons.Star className="w-5 h-5 text-purple-600 fill-purple-600"/></div>
-                             <h4 className="text-sm text-gray-500 font-medium">주 방문 연령층</h4>
-                             <div className="mt-2 flex flex-col gap-1 w-full px-2">
-                                 {sbizStats.ageRank?.map((rank, i) => (
-                                     <div key={i} className="flex justify-between items-center text-xs">
-                                         <span className={`${i === 0 ? 'font-bold text-purple-600' : 'text-gray-600'}`}>{i+1}위 {rank.age}</span>
-                                     </div>
-                                 ))}
-                             </div>
-                        </div>
-                     </div>
                  )}
 
                  {/* Industry Analysis Card Container */}
