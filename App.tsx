@@ -3,8 +3,8 @@ import { PieChart, Pie, Cell, BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveCo
 import * as Icons from './components/Icons';
 import TradeMap from './components/Map';
 import GoogleAd from './components/GoogleAd';
-import { searchAddress, searchZones, fetchStores, searchAdminDistrict, fetchStoresInAdmin, fetchLocalAdminPolygon, fetchSbizData, fetchSeoulSalesData, getAdminCodeFromCoords } from './services/api';
-import { Zone, Store, StoreStats, SbizStats, SeoulSalesData } from './types';
+import { searchAddress, searchZones, fetchStores, searchAdminDistrict, fetchStoresInAdmin, fetchLocalAdminPolygon, fetchSeoulSalesData, getAdminCodeFromCoords } from './services/api';
+import { Zone, Store, StoreStats, SeoulSalesData } from './types';
 
 // Constants
 const COLORS = ['#3b82f6', '#10b981', '#f59e0b', '#ef4444', '#8b5cf6', '#ec4899', '#6366f1', '#14b8a6', '#f97316', '#d946ef'];
@@ -112,7 +112,6 @@ const App: React.FC = () => {
   const [previewZone, setPreviewZone] = useState<Zone | null>(null);
   
   const [storeStats, setStoreStats] = useState<StoreStats | null>(null);
-  const [sbizStats, setSbizStats] = useState<SbizStats | null>(null);
   const [seoulSales, setSeoulSales] = useState<SeoulSalesData | null>(null);
   const [selectedSeoulIndustry, setSelectedSeoulIndustry] = useState<string | null>(null);
   
@@ -203,7 +202,6 @@ const App: React.FC = () => {
     setSelectedLarge(null); setSelectedMid(null);
     setSelectedBuildingIndex(null);
     setDetailedAnalysisFilter(null);
-    setSbizStats(null);
     setSeoulSales(null);
     setSelectedSeoulIndustry(null);
 
@@ -212,14 +210,12 @@ const App: React.FC = () => {
       let stdrYm = "";
 
       if (selectedZone.type === 'admin' && selectedZone.adminCode && selectedZone.adminLevel) {
-          const [storeResult, sbizResult, seoulResult] = await Promise.all([
+          const [storeResult, seoulResult] = await Promise.all([
              fetchStoresInAdmin(selectedZone.adminCode, selectedZone.adminLevel, (msg) => setLoadingMsg(msg)),
-             fetchSbizData(selectedZone.adminCode),
              selectedZone.adminCode.startsWith('11') ? fetchSeoulSalesData(selectedZone.adminCode) : Promise.resolve(null)
           ]);
           stores = storeResult.stores;
           stdrYm = storeResult.stdrYm;
-          setSbizStats(sbizResult);
           setSeoulSales(seoulResult);
       } else {
           const result = await fetchStores(selectedZone.trarNo, (msg) => setLoadingMsg(msg));
@@ -470,7 +466,7 @@ const App: React.FC = () => {
 
   const reset = () => {
       setStep("input"); setAddress(""); setFoundZones([]); setTradeZone(null); 
-      setAllRawStores([]); setStoreStats(null); setSbizStats(null); setDataDate(null);
+      setAllRawStores([]); setStoreStats(null); setDataDate(null);
       setSelectedBuildingIndex(null); setDetailedAnalysisFilter(null);
       setSeoulSales(null); setSelectedSeoulIndustry(null);
   };
@@ -544,10 +540,8 @@ const App: React.FC = () => {
                     상권 분석 서비스란?
                 </h3>
                 <p className="text-gray-600 leading-relaxed">
-                    공공데이터포털, 서울시 열린데이터광장, 소상공인진흥공단 등 <strong>신뢰할 수 있는 빅데이터</strong>를 융합하여 
-                    상권의 현재와 미래 가치를 분석해드립니다. 단순한 점포 수 확인을 넘어, 
-                    <strong>예상 매출(서울시), 유동인구, 배달 트렌드</strong>까지 무료로 확인하세요.
-                    {searchType === 'trade' ? '상가 밀집 구역(주요 상권)을 중심으로' : '행정 구역(동 단위)을 기준으로'} 데이터를 분석합니다.
+                    성공적인 창업은 정확한 데이터에서 시작됩니다. 본 서비스는 공공데이터포털(Data.go.kr), 서울시 열린데이터광장, 통계청(SGIS)의 방대한 빅데이터를 실시간으로 융합·분석합니다.
+                    유료 서비스 못지않은 고품질의 <strong>입지 분석, 점포 밀집도, 프랜차이즈 현황, 서울시 추정 매출 데이터</strong>를 100% 무료로 확인하세요.
                 </p>
             </section>
             
@@ -559,15 +553,15 @@ const App: React.FC = () => {
                 <ul className="space-y-3 text-gray-600">
                     <li className="flex gap-3">
                         <span className="flex-shrink-0 w-6 h-6 bg-gray-200 rounded-full flex items-center justify-center font-bold text-xs text-gray-700">1</span>
-                        <span><strong>기준 선택 및 검색:</strong> '행정 구역(동)' 또는 '주요 상권' 중 원하는 분석 기준을 선택하고 주소를 입력하세요.</span>
+                        <span><strong>지역 검색:</strong> 분석을 희망하는 동 이름이나 도로명 주소를 입력하여 검색합니다. (예: 삼성동, 테헤란로)</span>
                     </li>
                     <li className="flex gap-3">
                         <span className="flex-shrink-0 w-6 h-6 bg-gray-200 rounded-full flex items-center justify-center font-bold text-xs text-gray-700">2</span>
-                        <span><strong>위치 확인:</strong> 지도에서 검색된 위치가 정확한지 확인한 후 '분석하기' 버튼을 클릭합니다.</span>
+                        <span><strong>영역 설정:</strong> '행정동(주거 인구 중심)' 또는 '주요 상권(유동 인구 중심)' 중 분석 목적에 맞는 기준을 선택하고 지도로 위치를 확인합니다.</span>
                     </li>
                     <li className="flex gap-3">
                         <span className="flex-shrink-0 w-6 h-6 bg-gray-200 rounded-full flex items-center justify-center font-bold text-xs text-gray-700">3</span>
-                        <span><strong>리포트 확인:</strong> 원하는 구역을 선택하면 매출, 유동인구, 업종 분포 등 상세 리포트가 즉시 생성됩니다.</span>
+                        <span><strong>데이터 확인:</strong> 업종별 분포, 1층 점포 비율, 프랜차이즈 현황, 서울시 매출 추이 등 시각화된 리포트를 분석하여 인사이트를 얻습니다.</span>
                     </li>
                 </ul>
             </section>
@@ -581,19 +575,19 @@ const App: React.FC = () => {
                     <ul className="grid grid-cols-1 md:grid-cols-2 gap-4 text-sm text-gray-700">
                         <li className="flex items-start gap-2">
                             <Icons.Wallet className="w-4 h-4 text-indigo-500 mt-0.5"/>
-                            <span><strong>매출 분석 (서울시 전용):</strong> 업종별 월 평균 추정 매출, 요일/시간대별 매출, 성별/연령별 소비 패턴</span>
+                            <span><strong>서울시 추정 매출:</strong> 카드 소비 데이터를 기반으로 한 요일·시간대별, 성별·연령별 매출 패턴 정밀 분석 (서울 지역 한정)</span>
                         </li>
                         <li className="flex items-start gap-2">
-                            <Icons.Users className="w-4 h-4 text-blue-500 mt-0.5"/>
-                            <span><strong>소상공인 핵심 지표:</strong> 일 평균 유동인구, 배달 서비스 피크 요일, 주 방문 연령층 Top 5</span>
+                            <Icons.Layers className="w-4 h-4 text-blue-500 mt-0.5"/>
+                            <span><strong>상가 밀집도 & 층별 분석:</strong> 건물별 상가 밀집 순위 및 1층 점포 비율을 통해 상권의 활기도와 임대료 수준 간접 파악</span>
                         </li>
                         <li className="flex items-start gap-2">
                             <Icons.PieChartIcon className="w-4 h-4 text-green-500 mt-0.5"/>
-                            <span><strong>업종 및 점포 현황:</strong> 대분류/중분류 업종 구성비, 프랜차이즈 가맹점 비율, 1층 점포 비중</span>
+                            <span><strong>업종 및 경쟁 분석:</strong> 내 업종의 점포 수, 구성비, 프랜차이즈 vs 개인 점포 비율 비교</span>
                         </li>
                         <li className="flex items-start gap-2">
                             <Icons.Building className="w-4 h-4 text-orange-500 mt-0.5"/>
-                            <span><strong>주요 시설 분석:</strong> 상가 밀집 건물 순위, 주요 프랜차이즈 및 브랜드 입점 현황 리스트</span>
+                            <span><strong>핵심 상업 시설:</strong> 스타벅스, 올리브영 등 앵커 스토어 입점 현황 및 상가 리스트 제공</span>
                         </li>
                     </ul>
                 </div>
