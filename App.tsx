@@ -133,10 +133,6 @@ const App: React.FC = () => {
   // Sales Tab State
   const [salesViewMode, setSalesViewMode] = useState<'amount' | 'count'>('amount');
 
-  // Chart Hover States
-  const [focusedTimeIndex, setFocusedTimeIndex] = useState<number | null>(null);
-  const [focusedAgeIndex, setFocusedAgeIndex] = useState<number | null>(null);
-
   const handleGeocode = async () => {
     if (!address) { setError("주소를 입력해주세요."); return; }
     setLoading(true); setLoadingMsg("주소 위치를 확인하고 있습니다..."); setError(null);
@@ -425,6 +421,23 @@ const App: React.FC = () => {
     ];
   }, [currentSeoulData, salesViewMode]);
 
+  // Prep Data for Day of Week Chart
+  const dayChartData = useMemo(() => {
+    if (!currentSeoulData) return [];
+    const source = salesViewMode === 'amount' ? currentSeoulData.dayAmount : currentSeoulData.dayCount;
+    
+    // Calculate total for percentage
+    const total = Object.values(source).reduce((acc, curr) => acc + curr, 0) || 1;
+    const days = ['MON', 'TUE', 'WED', 'THU', 'FRI', 'SAT', 'SUN'];
+    const mapDay: any = { MON:'월', TUE:'화', WED:'수', THU:'목', FRI:'금', SAT:'토', SUN:'일' };
+
+    return days.map(d => ({
+        name: mapDay[d],
+        value: source[d],
+        percentStr: `${((source[d] / total) * 100).toFixed(1)}%`
+    }));
+  }, [currentSeoulData, salesViewMode]);
+
   // Prep Data for Gender Chart
   const genderChartData = useMemo(() => {
     if (!currentSeoulData) return [];
@@ -435,6 +448,25 @@ const App: React.FC = () => {
         { name: '여성', value: source.female, percent: total ? (source.female/total)*100 : 0, color: '#ec4899' },
     ];
   }, [currentSeoulData, salesViewMode]);
+
+  const CustomXAxisTick = ({ x, y, payload, data }: any) => {
+      if (!data || !data[payload.index]) return null;
+      const item = data[payload.index];
+      const valStr = salesViewMode === 'amount' 
+          ? `${formatSalesValue(item.value, 'amount')}억원` 
+          : `${item.value.toLocaleString()}건`;
+      
+      return (
+          <g transform={`translate(${x},${y})`}>
+              <text x={0} y={0} dy={12} textAnchor="middle" fill="#4b5563" fontSize={11} fontWeight="bold">
+                  {payload.value}
+              </text>
+              <text x={0} y={0} dy={26} textAnchor="middle" fill="#9ca3af" fontSize={10}>
+                  {valStr}
+              </text>
+          </g>
+      );
+  };
 
   const reset = () => {
       setStep("input"); setAddress(""); setFoundZones([]); setTradeZone(null); 
@@ -773,34 +805,17 @@ const App: React.FC = () => {
                                 {/* Bottom: Day of Week Analysis */}
                                 <div className="bg-white border rounded-xl p-4 flex-1">
                                     <h4 className="font-bold text-gray-700 mb-3 text-sm">요일별 {salesViewMode === 'amount' ? '매출' : '건수'} 분석</h4>
-                                    <div className="flex flex-col gap-3 h-full justify-center">
-                                        <div className="bg-gray-50 p-3 rounded-lg flex justify-between items-center mb-4">
-                                            <span className="text-xs text-gray-500 font-bold">가장 높은 요일</span>
-                                            {(() => {
-                                                const source = salesViewMode === 'amount' ? currentSeoulData.dayAmount : currentSeoulData.dayCount;
-                                                const keys = Object.keys(source);
-                                                if (keys.length === 0) return <span>-</span>;
-                                                const peakDay = keys.reduce((a, b) => source[a] > source[b] ? a : b);
-                                                const mapDay: any = { MON:'월', TUE:'화', WED:'수', THU:'목', FRI:'금', SAT:'토', SUN:'일' };
-                                                return <span className="text-lg font-black text-indigo-600">{mapDay[peakDay]}요일</span>;
-                                            })()}
-                                        </div>
-                                        <div className="grid grid-cols-7 gap-1 text-center h-[140px]">
-                                            {['MON','TUE','WED','THU','FRI','SAT','SUN'].map((d) => {
-                                                const mapDay: any = { MON:'월', TUE:'화', WED:'수', THU:'목', FRI:'금', SAT:'토', SUN:'일' };
-                                                const val = salesViewMode === 'amount' ? currentSeoulData.dayAmount[d] : currentSeoulData.dayCount[d];
-                                                const maxVal = Math.max(...Object.values(salesViewMode === 'amount' ? currentSeoulData.dayAmount : currentSeoulData.dayCount)) || 1;
-                                                const percent = (val / maxVal) * 100;
-                                                return (
-                                                    <div key={d} className="flex flex-col items-center gap-1 h-full justify-end group">
-                                                        <div className="w-full bg-gray-100 rounded-t-sm relative h-full flex items-end justify-center">
-                                                            <div className="w-full bg-indigo-400 rounded-t-sm opacity-80 transition-all duration-500 group-hover:opacity-100" style={{ height: `${percent}%` }}></div>
-                                                        </div>
-                                                        <span className="text-xs font-bold text-gray-600">{mapDay[d]}</span>
-                                                    </div>
-                                                )
-                                            })}
-                                        </div>
+                                    <div className="h-48">
+                                        <ResponsiveContainer width="100%" height="100%">
+                                            <BarChart data={dayChartData} margin={{top: 20, right: 0, left: 0, bottom: 20}}>
+                                                <CartesianGrid strokeDasharray="3 3" vertical={false} />
+                                                <XAxis dataKey="name" tick={<CustomXAxisTick data={dayChartData} />} interval={0} height={40} />
+                                                <Tooltip formatter={(value: number) => salesViewMode === 'amount' ? `${formatSalesValue(value, 'amount')}억원` : `${value.toLocaleString()}건`} cursor={{fill: 'transparent'}} />
+                                                <Bar dataKey="value" fill="#93c5fd" activeBar={{ fill: '#3b82f6' }} radius={[4, 4, 0, 0]} isAnimationActive={false}>
+                                                    <LabelList dataKey="percentStr" position="insideTop" style={{ fill: '#1e3a8a', fontWeight: 'bold', fontSize: '11px' }} />
+                                                </Bar>
+                                            </BarChart>
+                                        </ResponsiveContainer>
                                     </div>
                                 </div>
                             </div>
@@ -815,28 +830,14 @@ const App: React.FC = () => {
                                     <ResponsiveContainer width="100%" height="100%">
                                         <BarChart 
                                             data={timeChartData} 
-                                            margin={{top: 20, right: 30, left: 20, bottom: 5}}
-                                            onMouseMove={(state) => {
-                                                if (state.activeTooltipIndex !== undefined) {
-                                                    setFocusedTimeIndex(Number(state.activeTooltipIndex));
-                                                } else {
-                                                    setFocusedTimeIndex(null);
-                                                }
-                                            }}
-                                            onMouseLeave={() => setFocusedTimeIndex(null)}
+                                            margin={{top: 20, right: 30, left: 20, bottom: 20}}
                                         >
                                             <CartesianGrid strokeDasharray="3 3" vertical={false} />
-                                            <XAxis dataKey="name" tick={{fontSize: 11}} />
+                                            <XAxis dataKey="name" tick={<CustomXAxisTick data={timeChartData} />} interval={0} height={40} />
                                             <YAxis hide />
-                                            <Tooltip formatter={(value: number) => salesViewMode === 'amount' ? `${formatSalesValue(value, 'amount')}억원` : `${value.toLocaleString()}건`} />
-                                            <Bar dataKey="value" radius={[4, 4, 0, 0]}>
-                                                {timeChartData.map((entry, index) => (
-                                                    <Cell 
-                                                        key={`cell-${index}`} 
-                                                        fill={focusedTimeIndex === index ? '#10b981' : '#86efac'} 
-                                                    />
-                                                ))}
-                                                <LabelList dataKey="percentStr" position="insideTop" style={{ fill: 'white', fontWeight: 'bold', fontSize: '11px' }} />
+                                            <Tooltip formatter={(value: number) => salesViewMode === 'amount' ? `${formatSalesValue(value, 'amount')}억원` : `${value.toLocaleString()}건`} cursor={{fill: 'transparent'}} />
+                                            <Bar dataKey="value" fill="#86efac" activeBar={{ fill: '#10b981' }} radius={[4, 4, 0, 0]} isAnimationActive={false}>
+                                                <LabelList dataKey="percentStr" position="insideTop" style={{ fill: '#064e3b', fontWeight: 'bold', fontSize: '11px' }} />
                                             </Bar>
                                         </BarChart>
                                     </ResponsiveContainer>
@@ -875,27 +876,13 @@ const App: React.FC = () => {
                                         <ResponsiveContainer width="100%" height="100%">
                                             <BarChart 
                                                 data={ageChartData} 
-                                                margin={{top: 20, right: 0, left: 0, bottom: 0}}
-                                                onMouseMove={(state) => {
-                                                    if (state.activeTooltipIndex !== undefined) {
-                                                        setFocusedAgeIndex(Number(state.activeTooltipIndex));
-                                                    } else {
-                                                        setFocusedAgeIndex(null);
-                                                    }
-                                                }}
-                                                onMouseLeave={() => setFocusedAgeIndex(null)}
+                                                margin={{top: 20, right: 0, left: 0, bottom: 20}}
                                             >
                                                 <CartesianGrid strokeDasharray="3 3" vertical={false} />
-                                                <XAxis dataKey="name" tick={{fontSize: 11}} />
+                                                <XAxis dataKey="name" tick={<CustomXAxisTick data={ageChartData} />} interval={0} height={40} />
                                                 <Tooltip formatter={(value: number) => salesViewMode === 'amount' ? `${formatSalesValue(value, 'amount')}억원` : `${value.toLocaleString()}건`} cursor={{fill: 'transparent'}} />
-                                                <Bar dataKey="value" radius={[4, 4, 0, 0]}>
-                                                    {ageChartData.map((entry, index) => (
-                                                        <Cell 
-                                                            key={`cell-${index}`} 
-                                                            fill={focusedAgeIndex === index ? '#f97316' : '#fdba74'} 
-                                                        />
-                                                    ))}
-                                                    <LabelList dataKey="percentStr" position="insideTop" style={{ fill: 'white', fontWeight: 'bold', fontSize: '11px' }} />
+                                                <Bar dataKey="value" fill="#fdba74" activeBar={{ fill: '#f97316' }} radius={[4, 4, 0, 0]} isAnimationActive={false}>
+                                                    <LabelList dataKey="percentStr" position="insideTop" style={{ fill: '#7c2d12', fontWeight: 'bold', fontSize: '11px' }} />
                                                 </Bar>
                                             </BarChart>
                                         </ResponsiveContainer>
