@@ -532,6 +532,17 @@ const App: React.FC = () => {
                 <Icons.List className="text-blue-500"/> 
                 {searchType === 'trade' ? `주변 상권 선택 (${foundZones.length}개)` : '분석 대상 행정구역 선택'}
             </h3>
+            
+            {/* ADDED MAP SECTION */}
+            <div className="h-80 w-full rounded-lg overflow-hidden border border-gray-300 mb-6 relative z-0">
+                <TradeMap 
+                    lat={previewZone?.searchLat || searchCoords.lat} 
+                    lon={previewZone?.searchLon || searchCoords.lon} 
+                    polygonCoords={previewZone?.parsedPolygon} 
+                    tradeName={previewZone?.mainTrarNm} 
+                />
+            </div>
+            
             <div className="grid grid-cols-1 gap-4">
                 {foundZones.map((z, i) => (
                     <div key={i} className={`border rounded-xl p-4 transition-all duration-300 ${previewZone?.trarNo === z.trarNo ? 'bg-blue-50 shadow-md border-blue-500' : 'bg-white hover:shadow-sm'}`}>
