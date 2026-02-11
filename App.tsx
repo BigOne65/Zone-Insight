@@ -4,7 +4,7 @@ import { GoogleGenAI } from "@google/genai"; // Import Google GenAI SDK
 import * as Icons from './components/Icons';
 import TradeMap from './components/Map';
 import GoogleAd from './components/GoogleAd';
-import { searchAddress, searchZones, fetchStores, searchAdminDistrict, fetchStoresInAdmin, fetchLocalAdminPolygon, fetchSeoulSalesData, getAdminCodeFromCoords } from './services/api';
+import { searchAddress, searchZones, fetchStores, searchAdminDistrict, fetchStoresInAdmin, fetchLocalAdminPolygon, fetchSeoulSalesData, getAdminCodeFromCoords, GOOGLE_GEMINI_API_KEY } from './services/api';
 import { Zone, Store, StoreStats, SeoulSalesData } from './types';
 
 // Constants
@@ -204,8 +204,8 @@ const App: React.FC = () => {
     setIsAiLoading(true);
     setAiSummary(null);
     try {
-        // Use the unified env var name: VITE_GOOGLE_GEMINI_API_KEY
-        const ai = new GoogleGenAI({ apiKey: process.env.VITE_GOOGLE_GEMINI_API_KEY });
+        // Use the API key exported from api.ts
+        const ai = new GoogleGenAI({ apiKey: GOOGLE_GEMINI_API_KEY });
         
         // 1. 업종별 상세 데이터 준비 (소상공인 데이터)
         // 대분류별 프랜차이즈 비율, 1층 비율, 대표 중분류 포함

@@ -12,11 +12,6 @@ export default defineConfig(({ mode }) => {
     build: {
       outDir: 'dist',
     },
-    define: {
-      // Expose VITE_GOOGLE_GEMINI_API_KEY to the client-side code as process.env.VITE_GOOGLE_GEMINI_API_KEY
-      // Checks both loaded env file (env) and system env (process.env) for robustness
-      'process.env.VITE_GOOGLE_GEMINI_API_KEY': JSON.stringify(env.VITE_GOOGLE_GEMINI_API_KEY || process.env.VITE_GOOGLE_GEMINI_API_KEY),
-    },
     server: {
       port: 5173,
       open: true,

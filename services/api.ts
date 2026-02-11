@@ -25,6 +25,7 @@ const DATA_API_KEY = getEnvVar("VITE_DATA_API_KEY");
 const VWORLD_KEY = getEnvVar("VITE_VWORLD_KEY");
 const SGIS_ID = getEnvVar("VITE_SGIS_SERVICE_ID");
 const SGIS_SECRET = getEnvVar("VITE_SGIS_SECRET_KEY");
+export const GOOGLE_GEMINI_API_KEY = getEnvVar("VITE_GOOGLE_GEMINI_API_KEY");
 
 // API Endpoints (Using Local Proxy via vite.config.ts or vercel.json)
 // V-World supports JSONP/CORS natively, so we keep it direct.
