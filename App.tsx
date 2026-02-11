@@ -204,7 +204,7 @@ const App: React.FC = () => {
     setIsAiLoading(true);
     setAiSummary(null);
     try {
-        const ai = new GoogleGenAI({ apiKey: GOOGLE_GEMINI_API_KEY });
+        const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
         
         // Prepare Data Context
         const topIndustries = stats.barData.slice(0, 3).map(d => `${d.name}(${d.count}개)`);
@@ -898,7 +898,7 @@ const App: React.FC = () => {
                             <div className="w-full lg:w-1/2 flex flex-col gap-4">
                                 {/* Top: Weekday/Weekend Analysis (RESTORED) */}
                                 <div className="bg-white border rounded-xl p-4 flex-1">
-                                    <h4 className="font-bold text-gray-700 mb-3 text-sm">주중/주말 매출 비중</h4>
+                                    <h4 className="font-bold text-gray-700 mb-3 text-sm">주중/주말 {salesViewMode === 'amount' ? '매출' : '건수'} 비중</h4>
                                     <div className="h-40 flex items-center justify-center">
                                         <ResponsiveContainer width="100%" height="100%">
                                             <PieChart>
