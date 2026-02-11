@@ -246,8 +246,8 @@ const App: React.FC = () => {
             contents: prompt,
         });
 
-        if (response.response.text) {
-            setAiSummary(response.response.text);
+        if (response.text) {
+            setAiSummary(response.text);
         }
     } catch (e) {
         console.error("AI Generation Error", e);
