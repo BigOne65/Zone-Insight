@@ -207,39 +207,71 @@ const App: React.FC = () => {
         // Use the unified env var name: VITE_GOOGLE_GEMINI_API_KEY
         const ai = new GoogleGenAI({ apiKey: process.env.VITE_GOOGLE_GEMINI_API_KEY });
         
-        // Prepare Data Context
-        const topIndustries = stats.barData.slice(0, 3).map(d => `${d.name}(${d.count}개)`);
-        const context = {
-            areaName: zoneName,
-            franchiseRate: stats.franchiseRate + "%",
-            firstFloorRate: stats.totalStores > 0 ? ((stats.floorData[0].value / stats.totalStores) * 100).toFixed(1) + "%" : "0%",
-            topCategories: topIndustries.join(", "),
-            totalStores: stats.totalStores,
-            salesInfo: seoulData ? {
-                weekendRatio: (seoulData.weekendAmount / (seoulData.weekdayAmount + seoulData.weekendAmount + 0.1) * 100).toFixed(1) + "%",
-                peakTime: Object.entries(seoulData.timeAmount).sort((a,b) => b[1] - a[1])[0][0].replace('_', '~') + "시",
-                peakAge: Object.entries(seoulData.ageAmount).sort((a,b) => b[1] - a[1])[0][0] + "대"
-            } : "데이터 없음"
-        };
+        // 1. 업종별 상세 데이터 준비 (소상공인 데이터)
+        // 대분류별 프랜차이즈 비율, 1층 비율, 대표 중분류 포함
+        const categoryDetails = stats.summaryTableData.map(d => {
+            return `- [${d.name}] 점포수: ${d.count}개(전체 대비 ${d.ratio.toFixed(1)}%), 프랜차이즈: ${d.franchiseRatio.toFixed(1)}%, 1층비율: ${d.firstFloorRatio.toFixed(1)}% (주요세부업종: ${d.topMid})`;
+        }).join('\n');
+
+        // 2. 분석 포인트 추출
+        // 프랜차이즈 20% 이상인 대분류 식별
+        const highFranchiseCats = stats.summaryTableData.filter(d => d.franchiseRatio >= 20).map(d => d.name);
+        
+        // 1층 점포가 가장 많은 대분류 식별
+        const top1F = stats.summaryTableData.sort((a,b) => b.firstFloorCount - a.firstFloorCount)[0];
+        
+        // 3. 서울시 매출 데이터 준비 (다각적 분석)
+        let seoulContext = "정보 없음 (서울시 외 지역이거나 데이터 부족)";
+        if (seoulData) {
+            const mapDay: any = { MON:'월', TUE:'화', WED:'수', THU:'목', FRI:'금', SAT:'토', SUN:'일' };
+            
+            // Peak Time finding
+            const peakTimeEntry = Object.entries(seoulData.timeAmount).sort((a,b) => b[1] - a[1])[0];
+            const peakTimeStr = peakTimeEntry ? `${peakTimeEntry[0].replace('_', '~')}시` : '정보없음';
+            
+            // Peak Day finding
+            const peakDayEntry = Object.entries(seoulData.dayAmount).sort((a,b) => b[1] - a[1])[0];
+            const peakDayStr = peakDayEntry ? mapDay[peakDayEntry[0]] : '정보없음';
+            
+            // Peak Age finding
+            const peakAgeEntry = Object.entries(seoulData.ageAmount).sort((a,b) => b[1] - a[1])[0];
+            const peakAgeStr = peakAgeEntry ? `${peakAgeEntry[0]}대` : '정보없음';
+
+            // Weekday vs Weekend Ratio
+            const totalSales = seoulData.weekdayAmount + seoulData.weekendAmount || 1;
+            const weekendRatio = ((seoulData.weekendAmount / totalSales) * 100).toFixed(1);
+
+            seoulContext = `
+            - 월 평균 총 매출: ${formatSalesValue(seoulData.totalAmount, 'amount')}억원 (건수: ${seoulData.totalCount.toLocaleString()}건)
+            - 주중 vs 주말 매출 비중: 주중 ${(100 - parseFloat(weekendRatio)).toFixed(1)}% vs 주말 ${weekendRatio}%
+            - 매출 피크: ${peakDayStr}요일, ${peakTimeStr}
+            - 주 소비 연령층: ${peakAgeStr}
+            `;
+        }
 
         const prompt = `
-            당신은 베테랑 상권 분석가입니다. 아래 데이터를 바탕으로 예비 창업자를 위한 **3문장 요약**을 작성해주세요.
+            당신은 20년 경력의 베테랑 상권 분석가입니다. 아래 데이터를 심층 분석하여 예비 창업자를 위한 **핵심 요약(3문장)**을 작성해주세요.
             
-            [상권 데이터: ${context.areaName}]
-            - 업종 분포 Top3: ${context.topCategories}
-            - 프랜차이즈 비율: ${context.franchiseRate} (높을수록 발달 상권)
-            - 1층 점포 비율: ${context.firstFloorRate} (낮을수록 오피스/빌딩 상권 가능성)
-            - (서울시 매출데이터): ${typeof context.salesInfo !== 'string' ? `주말 매출 비중 ${context.salesInfo.weekendRatio}, 피크 시간대 ${context.salesInfo.peakTime}, 주 소비 연령층 ${context.salesInfo.peakAge}` : "없음"}
+            [분석 대상: ${zoneName}]
 
-            **작성 가이드:**
-            1. 첫 번째 문장: 데이터를 근거로 상권의 전반적인 성격(예: 오피스 중심, 주거 밀집, 주말 유흥 등)을 규정하세요.
-            2. 두 번째 문장: 경쟁 강도나 소비 패턴에서 발견되는 눈에 띄는 특징을 언급하세요.
-            3. 세 번째 문장: 이 상권에 적합한 구체적인 창업 전략이나 주의사항을 한 가지 제안하세요.
+            1. 소상공인 업종별 현황 (대분류/중분류):
+            ${categoryDetails}
             
-            **주의:**
-            - 말투는 전문적이고 정중하게 작성하세요.
-            - 마크다운 문법(볼드 등)을 사용하지 말고 순수 텍스트로만 작성하세요.
-            - 3문장을 넘기지 마세요.
+            * 핵심 분석 기준:
+            - 프랜차이즈 비율이 20%를 넘는 업종(${highFranchiseCats.length > 0 ? highFranchiseCats.join(', ') : '없음'})은 대형 자본이 유입된 발달 상권으로 간주합니다.
+            - 1층 점포 집중도가 가장 높은 업종은 '${top1F?.name}'입니다.
+
+            2. 서울시 추정 매출 및 소비 패턴 (행정동 기준):
+            ${seoulContext}
+
+            **작성 미션 (필독):**
+            위 데이터를 종합적으로 검토하여 창업자가 의사결정을 할 수 있도록 **딱 세 문장**으로 요약하세요.
+            
+            1. **첫 번째 문장 (상권 정체성 규명)**: 업종 분포와 1층 비율, 프랜차이즈 현황을 근거로 상권의 성숙도와 주 이용 목적(오피스/주거/유흥 등)을 명확히 정의하십시오.
+            2. **두 번째 문장 (소비 패턴 및 경쟁 분석)**: 매출 데이터(요일, 시간, 연령)를 분석하여 실제 소비가 언제, 누구에 의해 주도되는지, 그리고 경쟁 강도는 어떠한지 설명하십시오.
+            3. **세 번째 문장 (전략적 제언)**: 생존 확률을 높일 수 있는 구체적인 입지 전략(층수, 타겟 요일/시간)이나 추천/비추천 업종에 대해 전문가로서 단호하게 조언하십시오.
+
+            **말투:** 전문적이고 신뢰감 있는 "하십시오"체 또는 "~합니다"체를 사용하세요.
         `;
 
         const response = await ai.models.generateContent({
