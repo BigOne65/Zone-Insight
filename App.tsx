@@ -831,6 +831,9 @@ const App: React.FC = () => {
                     </div>
                  </div>
 
+                 {/* AD Placement 1 */}
+                 <GoogleAd slot="4992341640" />
+
                  {/* Seoul Sales Analysis Section */}
                  {seoulSales && currentSeoulData && (
                     <div className="bg-white rounded-xl shadow-sm border p-4 md:p-6 animate-fade-in">
@@ -1126,9 +1129,6 @@ const App: React.FC = () => {
                                 </div>
                              </div>
                          </div>
-
-                         {/* AD Placement 1 */}
-                         <GoogleAd slot="4992341640" />
 
                          {/* Charts */}
                          <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
