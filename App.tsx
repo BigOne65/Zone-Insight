@@ -790,7 +790,7 @@ const App: React.FC = () => {
                     {/* AI Analysis Section */}
                     <div className="p-4 md:p-6 bg-gradient-to-r from-indigo-50 to-blue-50 border-t border-indigo-100">
                         <div className="flex items-start gap-3">
-                            <div className="bg-white p-2 rounded-lg shadow-sm text-indigo-600 mt-1">
+                            <div className="bg-white p-2 rounded-lg shadow-sm text-indigo-600 mt-1 shrink-0">
                                 {/* Sparkles Icon for AI */}
                                 <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="m12 3-1.912 5.813a2 2 0 0 1-1.275 1.275L3 12l5.813 1.912a2 2 0 0 1 1.275 1.275L12 21l1.912-5.813a2 2 0 0 1 1.275-1.275L12 3Z"/></svg>
                             </div>
