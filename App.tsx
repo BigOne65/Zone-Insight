@@ -548,6 +548,12 @@ const App: React.FC = () => {
       setAiSummary(null);
   };
 
+  const handleRefreshAi = () => {
+    if (tradeZone && storeStats) {
+        generateAiInsight(tradeZone.mainTrarNm, storeStats, seoulSales);
+    }
+  };
+
   return (
     <div className="min-h-screen max-w-6xl mx-auto p-3 md:p-8 flex flex-col">
       <div className="flex-grow">
@@ -795,7 +801,17 @@ const App: React.FC = () => {
                                 <Icons.Sparkles className="w-5 h-5 text-indigo-600" />
                             </div>
                             <div className="flex-1">
-                                <h3 className="font-bold text-indigo-900 mb-2 flex items-center gap-2">AI 상권 브리핑 <span className="text-[10px] bg-indigo-200 text-indigo-700 px-1.5 py-0.5 rounded">BETA</span></h3>
+                                <div className="flex justify-between items-center mb-2">
+                                    <h3 className="font-bold text-indigo-900 flex items-center gap-2">AI 상권 브리핑 <span className="text-[10px] bg-indigo-200 text-indigo-700 px-1.5 py-0.5 rounded">BETA</span></h3>
+                                    <button 
+                                        onClick={handleRefreshAi}
+                                        disabled={isAiLoading}
+                                        className="text-xs bg-white border border-indigo-200 text-indigo-600 px-2 py-1.5 rounded-lg hover:bg-indigo-50 flex items-center gap-1.5 transition-all shadow-sm disabled:opacity-50 disabled:cursor-not-allowed"
+                                    >
+                                        <Icons.RefreshCw className={`w-3.5 h-3.5 ${isAiLoading ? 'animate-spin' : ''}`} />
+                                        <span>새로고침</span>
+                                    </button>
+                                </div>
                                 {isAiLoading ? (
                                     <div className="space-y-2 animate-pulse">
                                         <div className="h-4 bg-indigo-200/50 rounded w-3/4"></div>
