@@ -1,5 +1,6 @@
 import React, { useState, useEffect, useMemo } from 'react';
 import { PieChart, Pie, Cell, BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer, Sector, Legend, CartesianGrid, LabelList } from 'recharts';
+import { GoogleGenAI } from "@google/genai"; // Import Google GenAI SDK
 import * as Icons from './components/Icons';
 import TradeMap from './components/Map';
 import GoogleAd from './components/GoogleAd';
@@ -132,6 +133,10 @@ const App: React.FC = () => {
   // Sales Tab State
   const [salesViewMode, setSalesViewMode] = useState<'amount' | 'count'>('amount');
 
+  // AI Analysis State
+  const [aiSummary, setAiSummary] = useState<string | null>(null);
+  const [isAiLoading, setIsAiLoading] = useState(false);
+
   const handleGeocode = async () => {
     if (!address) { setError("주소를 입력해주세요."); return; }
     setLoading(true); setLoadingMsg("주소 위치를 확인하고 있습니다..."); setError(null);
@@ -195,6 +200,63 @@ const App: React.FC = () => {
     }
   };
 
+  const generateAiInsight = async (zoneName: string, stats: StoreStats, seoulData: SeoulSalesData | null) => {
+    setIsAiLoading(true);
+    setAiSummary(null);
+    try {
+        const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
+        
+        // Prepare Data Context
+        const topIndustries = stats.barData.slice(0, 3).map(d => `${d.name}(${d.count}개)`);
+        const context = {
+            areaName: zoneName,
+            franchiseRate: stats.franchiseRate + "%",
+            firstFloorRate: stats.totalStores > 0 ? ((stats.floorData[0].value / stats.totalStores) * 100).toFixed(1) + "%" : "0%",
+            topCategories: topIndustries.join(", "),
+            totalStores: stats.totalStores,
+            salesInfo: seoulData ? {
+                weekendRatio: (seoulData.weekendAmount / (seoulData.weekdayAmount + seoulData.weekendAmount + 0.1) * 100).toFixed(1) + "%",
+                peakTime: Object.entries(seoulData.timeAmount).sort((a,b) => b[1] - a[1])[0][0].replace('_', '~') + "시",
+                peakAge: Object.entries(seoulData.ageAmount).sort((a,b) => b[1] - a[1])[0][0] + "대"
+            } : "데이터 없음"
+        };
+
+        const prompt = `
+            당신은 베테랑 상권 분석가입니다. 아래 데이터를 바탕으로 예비 창업자를 위한 **3문장 요약**을 작성해주세요.
+            
+            [상권 데이터: ${context.areaName}]
+            - 업종 분포 Top3: ${context.topCategories}
+            - 프랜차이즈 비율: ${context.franchiseRate} (높을수록 발달 상권)
+            - 1층 점포 비율: ${context.firstFloorRate} (낮을수록 오피스/빌딩 상권 가능성)
+            - (서울시 매출데이터): ${typeof context.salesInfo !== 'string' ? `주말 매출 비중 ${context.salesInfo.weekendRatio}, 피크 시간대 ${context.salesInfo.peakTime}, 주 소비 연령층 ${context.salesInfo.peakAge}` : "없음"}
+
+            **작성 가이드:**
+            1. 첫 번째 문장: 데이터를 근거로 상권의 전반적인 성격(예: 오피스 중심, 주거 밀집, 주말 유흥 등)을 규정하세요.
+            2. 두 번째 문장: 경쟁 강도나 소비 패턴에서 발견되는 눈에 띄는 특징을 언급하세요.
+            3. 세 번째 문장: 이 상권에 적합한 구체적인 창업 전략이나 주의사항을 한 가지 제안하세요.
+            
+            **주의:**
+            - 말투는 전문적이고 정중하게 작성하세요.
+            - 마크다운 문법(볼드 등)을 사용하지 말고 순수 텍스트로만 작성하세요.
+            - 3문장을 넘기지 마세요.
+        `;
+
+        const response = await ai.models.generateContent({
+            model: 'gemini-3-flash-preview',
+            contents: prompt,
+        });
+
+        if (response.response.text) {
+            setAiSummary(response.response.text);
+        }
+    } catch (e) {
+        console.error("AI Generation Error", e);
+        setAiSummary("AI 분석을 불러오는 도중 오류가 발생했습니다. 잠시 후 다시 시도해주세요.");
+    } finally {
+        setIsAiLoading(false);
+    }
+  };
+
   const handleAnalyzeZone = async (selectedZone: Zone) => {
     setLoading(true); setLoadingMsg("상권 상세 데이터를 분석하고 있습니다..."); setError(null);
     setTradeZone(selectedZone);
@@ -204,10 +266,12 @@ const App: React.FC = () => {
     setDetailedAnalysisFilter(null);
     setSeoulSales(null);
     setSelectedSeoulIndustry(null);
+    setAiSummary(null); // Reset AI summary
 
     try {
       let stores: Store[] = [];
       let stdrYm = "";
+      let fetchedSeoulSales: SeoulSalesData | null = null;
 
       if (selectedZone.type === 'admin' && selectedZone.adminCode && selectedZone.adminLevel) {
           const [storeResult, seoulResult] = await Promise.all([
@@ -216,6 +280,7 @@ const App: React.FC = () => {
           ]);
           stores = storeResult.stores;
           stdrYm = storeResult.stdrYm;
+          fetchedSeoulSales = seoulResult;
           setSeoulSales(seoulResult);
       } else {
           const result = await fetchStores(selectedZone.trarNo, (msg) => setLoadingMsg(msg));
@@ -226,8 +291,8 @@ const App: React.FC = () => {
                setLoadingMsg("행정동 매출 데이터를 추가 조회중입니다...");
                const adminCode = await getAdminCodeFromCoords(selectedZone.searchLat, selectedZone.searchLon);
                if (adminCode && adminCode.startsWith('11')) {
-                   const seoulData = await fetchSeoulSalesData(adminCode);
-                   setSeoulSales(seoulData);
+                   fetchedSeoulSales = await fetchSeoulSalesData(adminCode);
+                   setSeoulSales(fetchedSeoulSales);
                }
           }
       }
@@ -238,7 +303,13 @@ const App: React.FC = () => {
       
       setDataDate(fmtDate);
       setAllRawStores(stores);
-      analyzeData(stores);
+      
+      // Calculate Stats & Trigger AI
+      const calculatedStats = analyzeData(stores);
+      if (calculatedStats) {
+          generateAiInsight(selectedZone.mainTrarNm, calculatedStats, fetchedSeoulSales);
+      }
+
     } catch (err: any) {
       setError("상세 데이터 로딩 실패: " + err.message);
     } finally {
@@ -246,8 +317,9 @@ const App: React.FC = () => {
     }
   };
 
-  const analyzeData = (stores: Store[], largeFilter?: string | null, midFilter?: string | null) => {
-    if (!stores.length) return;
+  // Modified to return stats
+  const analyzeData = (stores: Store[], largeFilter?: string | null, midFilter?: string | null): StoreStats | null => {
+    if (!stores.length) return null;
 
     const summaryGroups: Record<string, any> = {};
     stores.forEach(s => {
@@ -307,7 +379,7 @@ const App: React.FC = () => {
         return (a.bizesNm || "").localeCompare(b.bizesNm || "");
     });
 
-    setStoreStats({
+    const stats: StoreStats = {
         totalStores: filtered.length,
         pieData: globalPieData,
         barData: fullBarData.slice(0, 10),
@@ -316,8 +388,12 @@ const App: React.FC = () => {
         floorData: [{ name: '1층 점포', value: fFloor }, { name: '그 외 층', value: filtered.length - fFloor }],
         franchiseRate: filtered.length ? ((franchise/filtered.length)*100).toFixed(1) : "0",
         summaryTableData
-    });
+    };
+
+    setStoreStats(stats);
     setTopStores(sortedStores.slice(0, 100));
+    
+    return stats;
   };
 
   useEffect(() => {
@@ -469,6 +545,7 @@ const App: React.FC = () => {
       setAllRawStores([]); setStoreStats(null); setDataDate(null);
       setSelectedBuildingIndex(null); setDetailedAnalysisFilter(null);
       setSeoulSales(null); setSelectedSeoulIndustry(null);
+      setAiSummary(null);
   };
 
   return (
@@ -685,6 +762,32 @@ const App: React.FC = () => {
                            selectedMarkerIndex={selectedBuildingIndex}
                            onMarkerClick={(index) => setSelectedBuildingIndex(prev => prev === index ? null : index)}
                         />
+                    </div>
+                    
+                    {/* AI Analysis Section */}
+                    <div className="p-4 md:p-6 bg-gradient-to-r from-indigo-50 to-blue-50 border-t border-indigo-100">
+                        <div className="flex items-start gap-3">
+                            <div className="bg-white p-2 rounded-lg shadow-sm text-indigo-600 mt-1">
+                                {/* Sparkles Icon for AI */}
+                                <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="m12 3-1.912 5.813a2 2 0 0 1-1.275 1.275L3 12l5.813 1.912a2 2 0 0 1 1.275 1.275L12 21l1.912-5.813a2 2 0 0 1 1.275-1.275L21 12l-5.813-1.912a2 2 0 0 1-1.275-1.275L12 3Z"/></svg>
+                            </div>
+                            <div className="flex-1">
+                                <h3 className="font-bold text-indigo-900 mb-2 flex items-center gap-2">AI 상권 브리핑 <span className="text-[10px] bg-indigo-200 text-indigo-700 px-1.5 py-0.5 rounded">BETA</span></h3>
+                                {isAiLoading ? (
+                                    <div className="space-y-2 animate-pulse">
+                                        <div className="h-4 bg-indigo-200/50 rounded w-3/4"></div>
+                                        <div className="h-4 bg-indigo-200/50 rounded w-5/6"></div>
+                                        <div className="h-4 bg-indigo-200/50 rounded w-2/3"></div>
+                                    </div>
+                                ) : aiSummary ? (
+                                    <div className="text-sm text-indigo-800 leading-relaxed whitespace-pre-line animate-fade-in">
+                                        {aiSummary}
+                                    </div>
+                                ) : (
+                                    <p className="text-sm text-gray-500">데이터 분석 대기 중...</p>
+                                )}
+                            </div>
+                        </div>
                     </div>
                  </div>
 
