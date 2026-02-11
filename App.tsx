@@ -4,7 +4,7 @@ import { GoogleGenAI } from "@google/genai"; // Import Google GenAI SDK
 import * as Icons from './components/Icons';
 import TradeMap from './components/Map';
 import GoogleAd from './components/GoogleAd';
-import { searchAddress, searchZones, fetchStores, searchAdminDistrict, fetchStoresInAdmin, fetchLocalAdminPolygon, fetchSeoulSalesData, getAdminCodeFromCoords } from './services/api';
+import { searchAddress, searchZones, fetchStores, searchAdminDistrict, fetchStoresInAdmin, fetchLocalAdminPolygon, fetchSeoulSalesData, getAdminCodeFromCoords, GOOGLE_GEMINI_API_KEY } from './services/api';
 import { Zone, Store, StoreStats, SeoulSalesData } from './types';
 
 // Constants
@@ -204,7 +204,7 @@ const App: React.FC = () => {
     setIsAiLoading(true);
     setAiSummary(null);
     try {
-        const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
+        const ai = new GoogleGenAI({ apiKey: GOOGLE_GEMINI_API_KEY });
         
         // Prepare Data Context
         const topIndustries = stats.barData.slice(0, 3).map(d => `${d.name}(${d.count}개)`);
