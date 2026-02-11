@@ -792,7 +792,7 @@ const App: React.FC = () => {
                         <div className="flex items-start gap-3">
                             <div className="bg-white p-2 rounded-lg shadow-sm text-indigo-600 mt-1 shrink-0">
                                 {/* Sparkles Icon for AI */}
-                                <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="m12 3-1.912 5.813a2 2 0 0 1-1.275 1.275L3 12l5.813 1.912a2 2 0 0 1 1.275 1.275L12 21l1.912-5.813a2 2 0 0 1 1.275-1.275L12 3Z"/></svg>
+                                <Icons.Sparkles className="w-5 h-5 text-indigo-600" />
                             </div>
                             <div className="flex-1">
                                 <h3 className="font-bold text-indigo-900 mb-2 flex items-center gap-2">AI 상권 브리핑 <span className="text-[10px] bg-indigo-200 text-indigo-700 px-1.5 py-0.5 rounded">BETA</span></h3>
