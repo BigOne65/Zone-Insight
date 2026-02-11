@@ -204,7 +204,8 @@ const App: React.FC = () => {
     setIsAiLoading(true);
     setAiSummary(null);
     try {
-        const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
+        // Use the unified env var name
+        const ai = new GoogleGenAI({ apiKey: process.env.VITE_GOOGLE_GEMINI_API_KEY });
         
         // Prepare Data Context
         const topIndustries = stats.barData.slice(0, 3).map(d => `${d.name}(${d.count}개)`);
@@ -914,7 +915,10 @@ const App: React.FC = () => {
                             <div className="w-full lg:w-1/2 flex flex-col gap-4">
                                 {/* Top: Weekday/Weekend Analysis (RESTORED) */}
                                 <div className="bg-white border rounded-xl p-4 flex-1">
-                                    <h4 className="font-bold text-gray-700 mb-3 text-sm">주중/주말 {salesViewMode === 'amount' ? '매출' : '건수'} 비중</h4>
+                                    <h4 className="font-bold text-gray-700 mb-3 text-sm flex items-center gap-2">
+                                        <Icons.Calendar className="w-4 h-4 text-indigo-500"/>
+                                        주중/주말 {salesViewMode === 'amount' ? '매출' : '건수'} 비중
+                                    </h4>
                                     <div className="h-40 flex items-center justify-center">
                                         <ResponsiveContainer width="100%" height="100%">
                                             <PieChart>
@@ -940,7 +944,10 @@ const App: React.FC = () => {
 
                                 {/* Bottom: Day of Week Analysis */}
                                 <div className="bg-white border rounded-xl p-4 flex-1">
-                                    <h4 className="font-bold text-gray-700 mb-3 text-sm">요일별 {salesViewMode === 'amount' ? '매출' : '건수'} 분석</h4>
+                                    <h4 className="font-bold text-gray-700 mb-3 text-sm flex items-center gap-2">
+                                        <Icons.Calendar className="w-4 h-4 text-indigo-500"/>
+                                        요일별 {salesViewMode === 'amount' ? '매출' : '건수'} 분석
+                                    </h4>
                                     <div className="h-48">
                                         <ResponsiveContainer width="100%" height="100%">
                                             <BarChart data={dayChartData} margin={{top: 20, right: 0, left: 0, bottom: 20}}>
@@ -961,7 +968,10 @@ const App: React.FC = () => {
                         <div className="flex flex-col lg:flex-row gap-6 mb-6">
                             {/* Time Slot Analysis */}
                             <div className="w-full lg:w-1/2 bg-white border rounded-xl p-4">
-                                <h4 className="font-bold text-gray-700 mb-3 text-sm">시간대별 {salesViewMode === 'amount' ? '매출' : '건수'} 분석</h4>
+                                <h4 className="font-bold text-gray-700 mb-3 text-sm flex items-center gap-2">
+                                    <Icons.Clock className="w-4 h-4 text-indigo-500"/>
+                                    시간대별 {salesViewMode === 'amount' ? '매출' : '건수'} 분석
+                                </h4>
                                 <div className="h-64">
                                     <ResponsiveContainer width="100%" height="100%">
                                         <BarChart 
@@ -984,8 +994,11 @@ const App: React.FC = () => {
                             <div className="w-full lg:w-1/2 bg-white border rounded-xl p-4 flex flex-col gap-4">
                                 {/* Gender */}
                                 <div>
-                                    <h4 className="font-bold text-gray-700 mb-2 text-sm flex justify-between">
-                                        <span>성별 분포</span>
+                                    <h4 className="font-bold text-gray-700 mb-2 text-sm flex justify-between items-center">
+                                        <span className="flex items-center gap-2">
+                                            <Icons.Users className="w-4 h-4 text-indigo-500"/>
+                                            성별 분포
+                                        </span>
                                         <span className="text-xs font-normal text-gray-500">남성 vs 여성</span>
                                     </h4>
                                     <div className="h-4 flex rounded-full overflow-hidden mb-1">
@@ -1007,7 +1020,10 @@ const App: React.FC = () => {
 
                                 {/* Age */}
                                 <div className="flex-1">
-                                    <h4 className="font-bold text-gray-700 mb-2 text-sm">연령대별 분포</h4>
+                                    <h4 className="font-bold text-gray-700 mb-2 text-sm flex items-center gap-2">
+                                        <Icons.Users className="w-4 h-4 text-indigo-500"/>
+                                        연령대별 분포
+                                    </h4>
                                     <div className="h-40">
                                         <ResponsiveContainer width="100%" height="100%">
                                             <BarChart 

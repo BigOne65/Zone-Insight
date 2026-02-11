@@ -13,9 +13,9 @@ export default defineConfig(({ mode }) => {
       outDir: 'dist',
     },
     define: {
-      // Expose API_KEY to the client-side code as process.env.API_KEY
-      // This fixes the "process is not defined" error in the browser
-      'process.env.API_KEY': JSON.stringify(env.API_KEY),
+      // Expose VITE_GOOGLE_GEMINI_API_KEY to the client-side code as process.env.VITE_GOOGLE_GEMINI_API_KEY
+      // This fixes the "process is not defined" error in the browser and unifies the key name
+      'process.env.VITE_GOOGLE_GEMINI_API_KEY': JSON.stringify(env.VITE_GOOGLE_GEMINI_API_KEY),
     },
     server: {
       port: 5173,
