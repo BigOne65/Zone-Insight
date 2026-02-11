@@ -702,7 +702,7 @@ const App: React.FC = () => {
             </h3>
             
             {/* ADDED MAP SECTION */}
-            <div className="h-80 w-full rounded-lg overflow-hidden border border-gray-300 mb-6 relative z-0">
+            <div className="h-80 w-full rounded-lg overflow-hidden border border-gray-300 mb-4 relative z-0">
                 <TradeMap 
                     lat={previewZone?.searchLat || searchCoords.lat} 
                     lon={previewZone?.searchLon || searchCoords.lon} 
@@ -710,24 +710,47 @@ const App: React.FC = () => {
                     tradeName={previewZone?.mainTrarNm} 
                 />
             </div>
+
+            {/* FIXED ACTION BUTTON */}
+            <div className="mb-6 sticky top-4 z-10">
+                <button 
+                    onClick={() => previewZone && handleAnalyzeZone(previewZone)} 
+                    disabled={!previewZone}
+                    className={`w-full py-4 rounded-xl font-bold text-lg shadow-md flex items-center justify-center gap-2 transition-all transform active:scale-95 ${
+                        previewZone 
+                            ? (searchType === 'trade' ? 'bg-green-600 text-white hover:bg-green-700 hover:shadow-lg hover:-translate-y-0.5' : 'bg-blue-600 text-white hover:bg-blue-700 hover:shadow-lg hover:-translate-y-0.5') 
+                            : 'bg-gray-200 text-gray-400 cursor-not-allowed'
+                    }`}
+                >
+                    {previewZone 
+                        ? <>{previewZone.mainTrarNm} 분석 시작 <Icons.ArrowRight className="w-5 h-5"/></> 
+                        : '지도나 리스트에서 분석할 구역을 선택해주세요'}
+                </button>
+            </div>
             
-            <div className="grid grid-cols-1 gap-4">
+            <div className="grid grid-cols-1 gap-3 max-h-[500px] overflow-y-auto custom-scrollbar pr-1">
                 {foundZones.map((z, i) => (
-                    <div key={i} className={`border rounded-xl p-4 transition-all duration-300 ${previewZone?.trarNo === z.trarNo ? 'bg-blue-50 shadow-md border-blue-500' : 'bg-white hover:shadow-sm'}`}>
-                        <div onClick={() => setPreviewZone(prev => prev?.trarNo === z.trarNo ? null : z)} className="cursor-pointer flex justify-between items-center">
-                            <div>
-                                <h4 className="font-bold text-gray-800 text-lg">{z.mainTrarNm}</h4>
-                                <div className="text-sm text-gray-500">{z.ctprvnNm} {z.signguNm}</div>
-                            </div>
-                            {previewZone?.trarNo === z.trarNo ? <Icons.ChevronUp className="text-gray-400"/> : <Icons.ChevronDown className="text-gray-400"/>}
+                    <div 
+                        key={i} 
+                        onClick={() => setPreviewZone(z)}
+                        className={`cursor-pointer border rounded-xl p-4 transition-all duration-200 flex justify-between items-center group ${
+                            previewZone?.trarNo === z.trarNo 
+                                ? (searchType === 'trade' ? 'bg-green-50 border-green-500 ring-1 ring-green-500' : 'bg-blue-50 border-blue-500 ring-1 ring-blue-500') 
+                                : 'bg-white hover:bg-gray-50 hover:border-gray-400'
+                        }`}
+                    >
+                        <div>
+                            <h4 className={`font-bold text-lg ${previewZone?.trarNo === z.trarNo ? 'text-gray-900' : 'text-gray-700'}`}>
+                                {z.mainTrarNm}
+                            </h4>
+                            <div className="text-sm text-gray-500">{z.ctprvnNm} {z.signguNm}</div>
                         </div>
-                        {previewZone?.trarNo === z.trarNo && (
-                            <div className="mt-4 pt-4 border-t border-blue-200 animate-fade-in">
-                                 <button onClick={(e) => { e.stopPropagation(); handleAnalyzeZone(z); }} className={`w-full text-white px-6 py-3 rounded-lg font-bold hover:opacity-90 transition flex items-center justify-center gap-2 ${searchType === 'trade' ? 'bg-green-600' : 'bg-blue-600'}`}>
-                                    이 {searchType === 'trade' ? '상권' : '구역'} 분석 시작 <Icons.ArrowRight className="w-4 h-4"/>
-                                 </button>
-                            </div>
-                        )}
+                        <div className={`rounded-full p-2 ${previewZone?.trarNo === z.trarNo ? 'bg-white shadow-sm' : 'bg-gray-100 group-hover:bg-white'}`}>
+                            {previewZone?.trarNo === z.trarNo 
+                                ? <Icons.Check className={`w-5 h-5 ${searchType === 'trade' ? 'text-green-600' : 'text-blue-600'}`}/> 
+                                : <div className="w-5 h-5 rounded-full border-2 border-gray-300" />
+                            }
+                        </div>
                     </div>
                 ))}
             </div>
