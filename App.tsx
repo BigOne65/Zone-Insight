@@ -4,7 +4,7 @@ import { GoogleGenAI } from "@google/genai"; // Import Google GenAI SDK
 import * as Icons from './components/Icons';
 import TradeMap from './components/Map';
 import GoogleAd from './components/GoogleAd';
-import { searchAddress, searchZones, fetchStores, searchAdminDistrict, fetchStoresInAdmin, fetchLocalAdminPolygon, fetchSeoulSalesData, getAdminCodeFromCoords } from './services/api';
+import { searchAddress, searchZones, fetchStores, searchAdminDistrict, fetchStoresInAdmin, fetchLocalAdminPolygon, fetchSeoulSalesData, getAdminCodeFromCoords, GOOGLE_GEMINI_API_KEY } from './services/api';
 import { Zone, Store, StoreStats, SeoulSalesData } from './types';
 
 // Constants
@@ -204,7 +204,7 @@ const App: React.FC = () => {
     setIsAiLoading(true);
     setAiSummary(null);
     try {
-        const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
+        const ai = new GoogleGenAI({ apiKey: GOOGLE_GEMINI_API_KEY });
         
         // Prepare Data Context
         const topIndustries = stats.barData.slice(0, 3).map(d => `${d.name}(${d.count}개)`);
@@ -769,7 +769,7 @@ const App: React.FC = () => {
                         <div className="flex items-start gap-3">
                             <div className="bg-white p-2 rounded-lg shadow-sm text-indigo-600 mt-1">
                                 {/* Sparkles Icon for AI */}
-                                <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="m12 3-1.912 5.813a2 2 0 0 1-1.275 1.275L3 12l5.813 1.912a2 2 0 0 1 1.275 1.275L12 21l1.912-5.813a2 2 0 0 1 1.275-1.275L21 12l-5.813-1.912a2 2 0 0 1-1.275-1.275L12 3Z"/></svg>
+                                <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="m12 3-1.912 5.813a2 2 0 0 1-1.275 1.275L3 12l5.813 1.912a2 2 0 0 1 1.275 1.275L12 21l1.912-5.813a2 2 0 0 1 1.275-1.275L12 3Z"/></svg>
                             </div>
                             <div className="flex-1">
                                 <h3 className="font-bold text-indigo-900 mb-2 flex items-center gap-2">AI 상권 브리핑 <span className="text-[10px] bg-indigo-200 text-indigo-700 px-1.5 py-0.5 rounded">BETA</span></h3>
