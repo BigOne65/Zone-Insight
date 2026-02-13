@@ -282,8 +282,9 @@ const App: React.FC = () => {
             **말투:** 전문적이고 신뢰감 있는 "하십시오"체 또는 "~합니다"체를 사용하세요.
         `;
 
+        // Switch to 'gemini-3-flash-preview' for better reliability on Free Tier
         const response = await ai.models.generateContent({
-            model: 'gemini-2.5-pro',
+            model: 'gemini-3-flash-preview',
             contents: prompt,
         });
 
@@ -292,9 +293,11 @@ const App: React.FC = () => {
         }
     } catch (e: any) {
         console.error("AI Generation Error", e);
-        // Error handling for typical 400/404 or auth errors
-        if (e.message?.includes('404') || e.toString().includes('not found')) {
-            setAiSummary("AI 모델을 찾을 수 없습니다. (gemini-3-pro-preview)");
+        // Error handling for 429 and others
+        if (e.message?.includes('429') || e.status === 429) {
+            setAiSummary("⚠️ AI 분석 요청량이 많아 일시적으로 제한되었습니다. 약 1분 뒤 '새로고침' 버튼을 눌러주세요.");
+        } else if (e.message?.includes('404') || e.toString().includes('not found')) {
+            setAiSummary("AI 모델 연결에 실패했습니다. (Model Not Found)");
         } else if (e.message?.includes('400') || e.message?.includes('403') || e.toString().includes('key')) {
             setAiSummary("AI 분석 권한 오류입니다. API 키 설정을 확인해주세요.");
         } else {
