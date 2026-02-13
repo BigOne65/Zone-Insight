@@ -12,11 +12,20 @@ const PROJ_5179 = "+proj=tmerc +lat_0=38 +lon_0=127.5 +k=0.9996 +x_0=1000000 +y_
  * 환경 변수 로드 헬퍼
  */
 const getEnvVar = (key: string): string => {
+    // 1. Vite Style (import.meta.env)
     // @ts-ignore
     if (typeof import.meta !== 'undefined' && import.meta.env) {
         // @ts-ignore
-        return import.meta.env[key] || "";
+        if (import.meta.env[key]) return import.meta.env[key];
     }
+    
+    // 2. Process Env Style (Node/Vercel Serverless) if available in build
+    try {
+        if (typeof process !== 'undefined' && process.env && process.env[key]) {
+            return process.env[key] as string;
+        }
+    } catch(e) {}
+
     return "";
 };
 
@@ -25,7 +34,9 @@ const DATA_API_KEY = getEnvVar("VITE_DATA_API_KEY");
 const VWORLD_KEY = getEnvVar("VITE_VWORLD_KEY");
 const SGIS_ID = getEnvVar("VITE_SGIS_SERVICE_ID");
 const SGIS_SECRET = getEnvVar("VITE_SGIS_SECRET_KEY");
-export const GOOGLE_GEMINI_API_KEY = getEnvVar("VITE_GOOGLE_GEMINI_API_KEY");
+
+// Google Gemini API Key: Try VITE_ prefixed first, then generic API_KEY
+export const GOOGLE_GEMINI_API_KEY = getEnvVar("VITE_GOOGLE_GEMINI_API_KEY") || getEnvVar("API_KEY");
 
 // API Endpoints (Using Local Proxy via vite.config.ts or vercel.json)
 // V-World supports JSONP/CORS natively, so we keep it direct.

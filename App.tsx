@@ -203,8 +203,16 @@ const App: React.FC = () => {
   const generateAiInsight = async (zoneName: string, stats: StoreStats, seoulData: SeoulSalesData | null) => {
     setIsAiLoading(true);
     setAiSummary(null);
+
+    // Safety check for API Key
+    if (!GOOGLE_GEMINI_API_KEY) {
+        setAiSummary("AI 분석을 위한 API 키가 설정되지 않았습니다. 관리자에게 문의하세요.");
+        setIsAiLoading(false);
+        return;
+    }
+
     try {
-        // Use the API key exported from api.ts
+        // Use the API key exported from api.ts (or process.env.API_KEY if available via build)
         const ai = new GoogleGenAI({ apiKey: GOOGLE_GEMINI_API_KEY });
         
         // 1. 업종별 상세 데이터 준비 (소상공인 데이터)
@@ -275,16 +283,23 @@ const App: React.FC = () => {
         `;
 
         const response = await ai.models.generateContent({
-            model: 'gemini-2.5-pro-preview',
+            model: 'gemini-2.5-pro',
             contents: prompt,
         });
 
         if (response.text) {
             setAiSummary(response.text);
         }
-    } catch (e) {
+    } catch (e: any) {
         console.error("AI Generation Error", e);
-        setAiSummary("AI 분석을 불러오는 도중 오류가 발생했습니다. 잠시 후 다시 시도해주세요.");
+        // Error handling for typical 400/404 or auth errors
+        if (e.message?.includes('404') || e.toString().includes('not found')) {
+            setAiSummary("AI 모델을 찾을 수 없습니다. (gemini-3-pro-preview)");
+        } else if (e.message?.includes('400') || e.message?.includes('403') || e.toString().includes('key')) {
+            setAiSummary("AI 분석 권한 오류입니다. API 키 설정을 확인해주세요.");
+        } else {
+            setAiSummary(`AI 분석을 불러오는 도중 오류가 발생했습니다: ${e.message}`);
+        }
     } finally {
         setIsAiLoading(false);
     }
